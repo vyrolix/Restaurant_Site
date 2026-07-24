@@ -1,5 +1,6 @@
 import React from 'react';
 import { MapPin } from 'lucide-react';
+import { useApp } from '../context/AppContext';
 import steakImg from '../assets/steak.png';
 import tableImg from '../assets/table.png';
 import salmonImg from '../assets/salmon.png';
@@ -7,6 +8,20 @@ import interiorImg from '../assets/interior.png';
 import saladImg from '../assets/salad.png';
 
 export default function Welcome() {
+  const { setCurrentScreen, tableId, isDineIn } = useApp();
+
+  const handleExplore = () => {
+    if (tableId) {
+      if (isDineIn) {
+        setCurrentScreen('menu');
+      } else {
+        setCurrentScreen('session-create');
+      }
+    } else {
+      setCurrentScreen('menu');
+    }
+  };
+
   return (
     <div className="h-[100dvh] w-full bg-neutral-900 sm:bg-neutral-900 flex items-center justify-center p-0 sm:p-4 font-sans overflow-hidden">
       {/* Mobile-first card container - exactly 100dvh, zero margins, no scrollbar */}
@@ -119,7 +134,7 @@ export default function Welcome() {
 
           {/* Action Button Section: Explore Menu - Staggered fade in, stays at bottom */}
           <div className="px-2 mt-4 animate-fade-up delay-500">
-            <button className="w-full bg-[#1C1C1C] hover:bg-neutral-800 text-white py-3.5 sm:py-4 px-6 rounded-full flex items-center justify-center transition-all duration-300 transform active:scale-95 hover:-translate-y-[2px] hover:shadow-xl active:translate-y-0 group cursor-pointer animate-pulse-glow">
+            <button onClick={handleExplore} className="w-full bg-[#1C1C1C] hover:bg-neutral-800 text-white py-3.5 sm:py-4 px-6 rounded-full flex items-center justify-center transition-all duration-300 transform active:scale-95 hover:-translate-y-[2px] hover:shadow-xl active:translate-y-0 group cursor-pointer animate-pulse-glow">
               {/* Fork and Spoon Icon */}
               <div className="flex items-center gap-1 text-[#C5A880] mr-4 group-hover:scale-110 group-hover:rotate-6 transition-all duration-300">
                 <svg className="w-5 h-5 fill-current" viewBox="0 0 24 24">
