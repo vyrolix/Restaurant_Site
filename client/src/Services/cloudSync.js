@@ -1,36 +1,16 @@
-// Universal Zero-CORS Cloud Synchronization Service for Vercel & Multi-Device Deployment
-
-const getApiEndpoint = () => {
-  if (typeof window !== 'undefined') {
-    return `${window.location.origin}/api/sync`;
-  }
-  return '/api/sync';
-};
+// Official Direct Supabase Cloud Synchronization Service for Multi-Device & Cross-Network Deployment
 
 const SUPABASE_URL = 'https://nkqiwnmaqcjulhjlcpqu.supabase.co';
-const SUPABASE_KEY = typeof window !== 'undefined' && window.atob 
-  ? window.atob('c2Jfc2VjcmV0Xy01NHUyTVVoZF9FamR3WFAtVXVvcXdfb0pLMEk0Sm0=')
-  : '';
+const SUPABASE_ANON_KEY = 'sb_publishable_BQPy3mX-E0AYAkVCkMDZMg_Xz3_6GO7';
 
 const getHeaders = () => ({
-  'apikey': SUPABASE_KEY,
-  'Authorization': `Bearer ${SUPABASE_KEY}`,
+  'apikey': SUPABASE_ANON_KEY,
+  'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
   'Content-Type': 'application/json',
   'Prefer': 'resolution=merge-duplicates'
 });
 
 export const fetchCloudMenu = async () => {
-  try {
-    const res = await fetch(`${getApiEndpoint()}?type=menu`, { cache: 'no-cache' });
-    if (res.ok) {
-      const data = await res.json();
-      if (data && Array.isArray(data) && data.length >= 5) {
-        return data;
-      }
-    }
-  } catch (err) {}
-
-  // Direct Supabase Fallback
   try {
     const res = await fetch(`${SUPABASE_URL}/rest/v1/kn_store?id=eq.menu&select=data`, {
       headers: getHeaders(),
@@ -43,22 +23,12 @@ export const fetchCloudMenu = async () => {
       }
     }
   } catch (err) {}
-
   return null;
 };
 
 export const pushCloudMenu = async (menuItems) => {
   if (!menuItems || !Array.isArray(menuItems) || menuItems.length < 5) return;
   
-  try {
-    await fetch(getApiEndpoint(), {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ type: 'menu', data: menuItems })
-    });
-  } catch (err) {}
-
-  // Direct Supabase Fallback
   try {
     await fetch(`${SUPABASE_URL}/rest/v1/kn_store?on_conflict=id`, {
       method: 'POST',
@@ -69,17 +39,6 @@ export const pushCloudMenu = async (menuItems) => {
 };
 
 export const fetchCloudOrders = async () => {
-  try {
-    const res = await fetch(`${getApiEndpoint()}?type=orders`, { cache: 'no-cache' });
-    if (res.ok) {
-      const data = await res.json();
-      if (data && Array.isArray(data.ordersQueue)) {
-        return data;
-      }
-    }
-  } catch (err) {}
-
-  // Direct Supabase Fallback
   try {
     const res = await fetch(`${SUPABASE_URL}/rest/v1/kn_store?id=eq.orders&select=data`, {
       headers: getHeaders(),
@@ -92,20 +51,10 @@ export const fetchCloudOrders = async () => {
       }
     }
   } catch (err) {}
-
   return null;
 };
 
 export const pushCloudOrders = async (ordersQueue, tables) => {
-  try {
-    await fetch(getApiEndpoint(), {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ type: 'orders', data: { ordersQueue, tables, updatedAt: Date.now() } })
-    });
-  } catch (err) {}
-
-  // Direct Supabase Fallback
   try {
     await fetch(`${SUPABASE_URL}/rest/v1/kn_store?on_conflict=id`, {
       method: 'POST',
