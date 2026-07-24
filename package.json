@@ -5,6 +5,6 @@
     "client"
   ],
   "scripts": {
-    "build": "npm run build --workspace=client"
+    "build": "npm run build --workspace=client && cp -R client/dist dist"
   }
 }
