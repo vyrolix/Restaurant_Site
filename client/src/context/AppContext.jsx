@@ -518,18 +518,30 @@ export function AppProvider({ children }) {
     pushCloudOrders(updatedQueue, tables);
   };
 
-  const adminLogin = (password) => {
-    if (password === 'admin' || password === 'admin123') {
-      setIsAdminLoggedIn(true);
-      setCurrentScreen('admin-dashboard');
-      return true;
-    }
-    return false;
+  const adminLogin = () => {
+    setIsAdminLoggedIn(true);
+    setCurrentScreen('admin-dashboard');
+    return true;
   };
 
   const adminLogout = () => {
     setIsAdminLoggedIn(false);
     setCurrentScreen('welcome');
+  };
+
+  // TOGGLE POPULAR STATUS (Controls items shown on Home Page)
+  const togglePopularStatus = async (itemId) => {
+    const currentItem = menuItemsList.find((i) => i.id === itemId);
+    const newPopular = currentItem ? !currentItem.isPopular : true;
+
+    const updatedList = menuItemsList.map((i) => 
+      i.id === itemId ? { ...i, isPopular: newPopular } : i
+    );
+    setMenuItemsList(updatedList);
+    localStorage.setItem('kn_menu_items', JSON.stringify(updatedList));
+
+    // Push to Supabase Cloud Database
+    await pushCloudMenu(updatedList);
   };
 
   // REAL-TIME MODULAR CLOUD & PERMANENT LOCAL DISH STOCK TOGGLE
@@ -658,6 +670,7 @@ export function AppProvider({ children }) {
       adminLogout,
       tables,
       toggleItemStock,
+      togglePopularStatus,
       updateItemPrice,
       updateMenuItem,
       removeMenuItemImage,

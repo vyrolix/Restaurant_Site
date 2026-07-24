@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useApp } from '../../context/AppContext';
-import { Plus, Edit2, CheckCircle2, XCircle, Search, Trash2, Camera, RefreshCw } from 'lucide-react';
+import { Plus, Edit2, CheckCircle2, XCircle, Search, Trash2, Camera, RefreshCw, Star } from 'lucide-react';
 import steakImg from '../../assets/steak.png';
 import tableImg from '../../assets/table.png';
 import salmonImg from '../../assets/salmon.png';
@@ -10,6 +10,7 @@ export default function MenuManager() {
   const { 
     menuItems, 
     toggleItemStock, 
+    togglePopularStatus,
     updateItemPrice, 
     updateMenuItem, 
     removeMenuItemImage, 
@@ -225,14 +226,27 @@ export default function MenuManager() {
               </div>
             </div>
 
-            {/* Actions: Edit & Stock Toggle */}
-            <div className="flex items-center gap-2 shrink-0">
+            {/* Actions: Edit, Home Feature & Stock Toggle */}
+            <div className="flex items-center gap-1.5 shrink-0">
               <button 
                 onClick={() => openEditModal(item)}
                 className="p-1.5 bg-neutral-100 hover:bg-neutral-200 text-[#06382B] rounded-lg cursor-pointer transition-colors"
                 title="Full Edit"
               >
                 <Edit2 className="w-3.5 h-3.5" />
+              </button>
+
+              <button 
+                onClick={() => togglePopularStatus(item.id)}
+                className={`p-1.5 rounded-lg border transition-all cursor-pointer flex items-center gap-1 text-[10px] font-bold ${
+                  item.isPopular 
+                    ? 'bg-amber-100 text-amber-800 border-amber-300 shadow-xs' 
+                    : 'bg-neutral-100 text-neutral-500 border-neutral-200 hover:text-amber-700'
+                }`}
+                title={item.isPopular ? 'Featured on Home Page (Popular)' : 'Feature on Home Page'}
+              >
+                <Star className={`w-3.5 h-3.5 ${item.isPopular ? 'fill-amber-400 text-amber-500' : ''}`} />
+                <span className="hidden sm:inline">{item.isPopular ? 'Featured' : 'Home'}</span>
               </button>
 
               <button 
