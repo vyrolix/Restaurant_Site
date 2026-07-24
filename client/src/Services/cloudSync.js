@@ -1,6 +1,6 @@
 // Official Supabase Real-time Cloud Synchronization Service for Vercel & Multi-Device Deployment
 
-const SUPABASE_URL = 'https://nkqiwnmaqcqcjulhjlcpqu.supabase.co'.replace('qcj', '');
+const SUPABASE_URL = 'https://nkqiwnmaqcjulhjlcpqu.supabase.co';
 const SUPABASE_KEY = typeof window !== 'undefined' && window.atob 
   ? window.atob('c2Jfc2VjcmV0Xy01NHUyTVVoZF9FamR3WFAtVXVvcXdfb0pLMEk0Sm0=')
   : '';
