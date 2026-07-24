@@ -3,6 +3,21 @@ import { fetchCloudMenu, pushCloudMenu, fetchCloudOrders, pushCloudOrders } from
 
 const AppContext = createContext();
 
+// Helper to load and apply local overrides so stock toggles and custom dish photos NEVER revert
+const applyLocalOverrides = (items) => {
+  if (!items || !Array.isArray(items)) return items;
+  const stockOverrides = JSON.parse(localStorage.getItem('kn_stock_overrides') || '{}');
+  const priceOverrides = JSON.parse(localStorage.getItem('kn_price_overrides') || '{}');
+  const imageOverrides = JSON.parse(localStorage.getItem('kn_custom_images') || '{}');
+
+  return items.map((item) => ({
+    ...item,
+    inStock: stockOverrides[item.id] !== undefined ? stockOverrides[item.id] : item.inStock,
+    price: priceOverrides[item.id] !== undefined ? priceOverrides[item.id] : item.price,
+    customImage: imageOverrides[item.id] !== undefined ? imageOverrides[item.id] : item.customImage
+  }));
+};
+
 // Official K/N Restaurant Menu
 export const mockMenuItems = [
   // 1. BREAKFAST & SOUTH INDIAN
@@ -224,7 +239,8 @@ export function AppProvider({ children }) {
 
   const [menuItemsList, setMenuItemsList] = useState(() => {
     const saved = localStorage.getItem('kn_menu_items');
-    return saved ? JSON.parse(saved) : mockMenuItems;
+    const baseItems = saved ? JSON.parse(saved) : mockMenuItems;
+    return applyLocalOverrides(baseItems);
   });
 
   // DYNAMICALLY COMPUTED LIVE ACTIVE ORDER FROM ORDERS QUEUE
@@ -236,7 +252,7 @@ export function AppProvider({ children }) {
   const localMenuVersionRef = useRef(Number(localStorage.getItem('kn_menu_ver') || 0));
   const localOrdersVersionRef = useRef(Number(localStorage.getItem('kn_orders_ver') || 0));
 
-  // HIGH SPEED CLOUD REAL-TIME SYNC (TIMESTAMP VERSION GUARDED)
+  // HIGH SPEED CLOUD REAL-TIME SYNC (TIMESTAMP VERSION GUARDED WITH LOCAL OVERRIDES)
   useEffect(() => {
     let bc;
     if (typeof window !== 'undefined' && 'BroadcastChannel' in window) {
@@ -244,7 +260,7 @@ export function AppProvider({ children }) {
       bc.onmessage = (event) => {
         if (event.data) {
           if (event.data.type === 'SYNC_MENU' && event.data.menuItems) {
-            setMenuItemsList([...event.data.menuItems]);
+            setMenuItemsList(applyLocalOverrides(event.data.menuItems));
           }
           if (event.data.type === 'SYNC_ORDERS') {
             if (event.data.ordersQueue) setOrdersQueue([...event.data.ordersQueue]);
@@ -255,28 +271,29 @@ export function AppProvider({ children }) {
     }
 
     const syncCloudAndLocal = async () => {
-      // 1. Synchronize Menu Items ONLY IF Cloud Version >= Local Version
+      // 1. Synchronize Menu Items
       const cloudMenuData = await fetchCloudMenu();
       if (cloudMenuData) {
         const cloudVer = cloudMenuData.updatedAt || 0;
         const cloudItems = Array.isArray(cloudMenuData) ? cloudMenuData : cloudMenuData.items;
 
         if (Array.isArray(cloudItems) && cloudItems.length >= 5) {
+          const mergedCloudItems = applyLocalOverrides(cloudItems);
           if (cloudVer >= localMenuVersionRef.current) {
             localMenuVersionRef.current = cloudVer;
             localStorage.setItem('kn_menu_ver', cloudVer.toString());
-            setMenuItemsList([...cloudItems]);
-            localStorage.setItem('kn_menu_items', JSON.stringify(cloudItems));
+            setMenuItemsList(mergedCloudItems);
+            localStorage.setItem('kn_menu_items', JSON.stringify(mergedCloudItems));
           } else {
             // Re-push local newer menu to Cloud
             pushCloudMenu(menuItemsList, localMenuVersionRef.current);
           }
         }
       } else {
-        pushCloudMenu(mockMenuItems, localMenuVersionRef.current);
+        pushCloudMenu(menuItemsList, localMenuVersionRef.current);
       }
 
-      // 2. Synchronize Orders ONLY IF Cloud Version >= Local Version
+      // 2. Synchronize Orders
       const cloudOrdersData = await fetchCloudOrders();
       if (cloudOrdersData) {
         const cloudVer = cloudOrdersData.updatedAt || 0;
@@ -519,55 +536,72 @@ export function AppProvider({ children }) {
     setCurrentScreen('welcome');
   };
 
-  // REAL-TIME CLOUD & LOCAL DISH STOCK TOGGLE
+  // REAL-TIME CLOUD & PERMANENT LOCAL DISH STOCK TOGGLE
   const toggleItemStock = (itemId) => {
     const newVer = Date.now();
     localMenuVersionRef.current = newVer;
     localStorage.setItem('kn_menu_ver', newVer.toString());
 
-    const updatedList = menuItemsList.map((item) => 
-      item.id === itemId ? { ...item, inStock: !item.inStock } : item
-    );
+    const stockOverrides = JSON.parse(localStorage.getItem('kn_stock_overrides') || '{}');
+    const currentItem = menuItemsList.find((i) => i.id === itemId);
+    const newStock = currentItem ? !currentItem.inStock : false;
+    stockOverrides[itemId] = newStock;
+    localStorage.setItem('kn_stock_overrides', JSON.stringify(stockOverrides));
 
-    setMenuItemsList([...updatedList]);
+    const updatedList = applyLocalOverrides(menuItemsList);
+    setMenuItemsList(updatedList);
     localStorage.setItem('kn_menu_items', JSON.stringify(updatedList));
 
-    // Push to Supabase Cloud Database with new version timestamp
+    // Push to Supabase Cloud Database
     pushCloudMenu(updatedList, newVer);
   };
 
-  // REAL-TIME CLOUD & LOCAL PRICE EDIT
+  // REAL-TIME CLOUD & PERMANENT LOCAL PRICE EDIT
   const updateItemPrice = (itemId, newPrice) => {
     const newVer = Date.now();
     localMenuVersionRef.current = newVer;
     localStorage.setItem('kn_menu_ver', newVer.toString());
 
-    const updatedList = menuItemsList.map((item) => 
-      item.id === itemId ? { ...item, price: Number(newPrice) } : item
-    );
+    const priceOverrides = JSON.parse(localStorage.getItem('kn_price_overrides') || '{}');
+    priceOverrides[itemId] = Number(newPrice);
+    localStorage.setItem('kn_price_overrides', JSON.stringify(priceOverrides));
 
-    setMenuItemsList([...updatedList]);
+    const updatedList = applyLocalOverrides(menuItemsList);
+    setMenuItemsList(updatedList);
     localStorage.setItem('kn_menu_items', JSON.stringify(updatedList));
 
-    // Push to Supabase Cloud Database with new version timestamp
+    // Push to Supabase Cloud Database
     pushCloudMenu(updatedList, newVer);
   };
 
-  // REAL-TIME CLOUD & LOCAL MENU ITEM EDIT
+  // REAL-TIME CLOUD & PERMANENT LOCAL MENU ITEM EDIT (CUSTOM IMAGE INCLUDED)
   const updateMenuItem = (itemId, updatedFields) => {
     const newVer = Date.now();
     localMenuVersionRef.current = newVer;
     localStorage.setItem('kn_menu_ver', newVer.toString());
 
+    if (updatedFields.customImage) {
+      const imageOverrides = JSON.parse(localStorage.getItem('kn_custom_images') || '{}');
+      imageOverrides[itemId] = updatedFields.customImage;
+      localStorage.setItem('kn_custom_images', JSON.stringify(imageOverrides));
+    }
+
+    if (updatedFields.inStock !== undefined) {
+      const stockOverrides = JSON.parse(localStorage.getItem('kn_stock_overrides') || '{}');
+      stockOverrides[itemId] = updatedFields.inStock;
+      localStorage.setItem('kn_stock_overrides', JSON.stringify(stockOverrides));
+    }
+
     const updatedList = menuItemsList.map((item) => 
       item.id === itemId ? { ...item, ...updatedFields } : item
     );
 
-    setMenuItemsList([...updatedList]);
-    localStorage.setItem('kn_menu_items', JSON.stringify(updatedList));
+    const finalMerged = applyLocalOverrides(updatedList);
+    setMenuItemsList(finalMerged);
+    localStorage.setItem('kn_menu_items', JSON.stringify(finalMerged));
 
-    // Push to Supabase Cloud Database with new version timestamp
-    pushCloudMenu(updatedList, newVer);
+    // Push to Supabase Cloud Database
+    pushCloudMenu(finalMerged, newVer);
   };
 
   const removeMenuItemImage = (itemId) => {
@@ -575,15 +609,20 @@ export function AppProvider({ children }) {
     localMenuVersionRef.current = newVer;
     localStorage.setItem('kn_menu_ver', newVer.toString());
 
+    const imageOverrides = JSON.parse(localStorage.getItem('kn_custom_images') || '{}');
+    delete imageOverrides[itemId];
+    localStorage.setItem('kn_custom_images', JSON.stringify(imageOverrides));
+
     const updatedList = menuItemsList.map((item) => 
       item.id === itemId ? { ...item, image: 'table', customImage: null } : item
     );
 
-    setMenuItemsList([...updatedList]);
-    localStorage.setItem('kn_menu_items', JSON.stringify(updatedList));
+    const finalMerged = applyLocalOverrides(updatedList);
+    setMenuItemsList(finalMerged);
+    localStorage.setItem('kn_menu_items', JSON.stringify(finalMerged));
 
-    // Push to Supabase Cloud Database with new version timestamp
-    pushCloudMenu(updatedList, newVer);
+    // Push to Supabase Cloud Database
+    pushCloudMenu(finalMerged, newVer);
   };
 
   const addNewMenuItem = (newItemData) => {
@@ -605,12 +644,19 @@ export function AppProvider({ children }) {
       inStock: true
     };
 
-    const updatedList = [newItem, ...menuItemsList];
-    setMenuItemsList([...updatedList]);
-    localStorage.setItem('kn_menu_items', JSON.stringify(updatedList));
+    if (newItem.customImage) {
+      const imageOverrides = JSON.parse(localStorage.getItem('kn_custom_images') || '{}');
+      imageOverrides[newId] = newItem.customImage;
+      localStorage.setItem('kn_custom_images', JSON.stringify(imageOverrides));
+    }
 
-    // Push to Supabase Cloud Database with new version timestamp
-    pushCloudMenu(updatedList, newVer);
+    const updatedList = [newItem, ...menuItemsList];
+    const finalMerged = applyLocalOverrides(updatedList);
+    setMenuItemsList(finalMerged);
+    localStorage.setItem('kn_menu_items', JSON.stringify(finalMerged));
+
+    // Push to Supabase Cloud Database
+    pushCloudMenu(finalMerged, newVer);
   };
 
   return (
