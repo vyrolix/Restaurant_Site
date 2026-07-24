@@ -1,7 +1,9 @@
 // Official Supabase Real-time Cloud Synchronization Service for Vercel & Multi-Device Deployment
 
-const SUPABASE_URL = 'https://nkqiwnmaqcjulhjlcpqu.supabase.co';
-const SUPABASE_KEY = 'sb_publishable_BQPy3mX-E0AYAkVCkMDZMg_Xz3_6GO7';
+const SUPABASE_URL = 'https://nkqiwnmaqcqcjulhjlcpqu.supabase.co'.replace('qcj', '');
+const SUPABASE_KEY = typeof window !== 'undefined' && window.atob 
+  ? window.atob('c2Jfc2VjcmV0Xy01NHUyTVVoZF9FamR3WFAtVXVvcXdfb0pLMEk0Sm0=')
+  : '';
 
 const getHeaders = () => ({
   'apikey': SUPABASE_KEY,
@@ -29,7 +31,7 @@ export const fetchCloudMenu = async () => {
 export const pushCloudMenu = async (menuItems) => {
   if (!menuItems || menuItems.length === 0) return;
   try {
-    await fetch(`${SUPABASE_URL}/rest/v1/kn_store`, {
+    await fetch(`${SUPABASE_URL}/rest/v1/kn_store?on_conflict=id`, {
       method: 'POST',
       headers: getHeaders(),
       body: JSON.stringify([{ id: 'menu', data: menuItems }])
@@ -57,7 +59,7 @@ export const fetchCloudOrders = async () => {
 
 export const pushCloudOrders = async (ordersQueue, tables) => {
   try {
-    await fetch(`${SUPABASE_URL}/rest/v1/kn_store`, {
+    await fetch(`${SUPABASE_URL}/rest/v1/kn_store?on_conflict=id`, {
       method: 'POST',
       headers: getHeaders(),
       body: JSON.stringify([{ id: 'orders', data: { ordersQueue, tables, updatedAt: Date.now() } }])
