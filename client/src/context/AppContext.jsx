@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
+import { fetchCloudMenu, pushCloudMenu, fetchCloudOrders, pushCloudOrders } from '../Services/cloudSync';
 
 const AppContext = createContext();
 
@@ -222,7 +223,7 @@ export function AppProvider({ children }) {
     return saved ? JSON.parse(saved) : mockMenuItems;
   });
 
-  // FAST POLLING & REAL-TIME BROADCAST SYNC FOR MENU DISH STOCK & ORDERS
+  // HIGH SPEED CLOUD & LOCAL REAL-TIME SYNC FOR VERCEL & LOCALHOST
   useEffect(() => {
     let bc;
     if (typeof window !== 'undefined' && 'BroadcastChannel' in window) {
@@ -240,19 +241,34 @@ export function AppProvider({ children }) {
       };
     }
 
-    const syncStockAndOrders = () => {
-      const savedMenu = localStorage.getItem('kn_menu_items');
-      if (savedMenu) {
-        try {
-          const parsed = JSON.parse(savedMenu);
-          setMenuItemsList(parsed);
-        } catch (err) {}
+    const syncCloudAndLocal = async () => {
+      // 1. Fetch Cloud DB Menu Items (Persists globally across Vercel)
+      const cloudMenu = await fetchCloudMenu();
+      if (cloudMenu && Array.isArray(cloudMenu)) {
+        setMenuItemsList(cloudMenu);
+        localStorage.setItem('kn_menu_items', JSON.stringify(cloudMenu));
+      } else {
+        const savedMenu = localStorage.getItem('kn_menu_items');
+        if (savedMenu) {
+          try { setMenuItemsList(JSON.parse(savedMenu)); } catch (err) {}
+        }
+      }
+
+      // 2. Fetch Cloud DB Orders & Tables (Persists globally across Vercel)
+      const cloudOrders = await fetchCloudOrders();
+      if (cloudOrders) {
+        if (cloudOrders.ordersQueue) setOrdersQueue(cloudOrders.ordersQueue);
+        if (cloudOrders.tables) setTables(cloudOrders.tables);
       }
     };
 
-    const intervalId = setInterval(syncStockAndOrders, 500);
+    // Initial Fetch
+    syncCloudAndLocal();
 
-    // Initial Fetch from Server API
+    // Fast 1.5s Polling for Vercel Global Sync
+    const intervalId = setInterval(syncCloudAndLocal, 1500);
+
+    // Initial Fetch from Express API (Localhost)
     fetch('/api/orders')
       .then((res) => res.json())
       .then((data) => {
@@ -263,7 +279,7 @@ export function AppProvider({ children }) {
           localStorage.setItem('kn_menu_items', JSON.stringify(data.menuItems));
         }
       })
-      .catch((err) => console.error(err));
+      .catch(() => {});
 
     // Open Server-Sent Events (SSE) Stream
     let eventSource;
@@ -301,9 +317,7 @@ export function AppProvider({ children }) {
           if (data.tables) setTables(data.tables);
         } catch (err) {}
       };
-    } catch (err) {
-      console.error(err);
-    }
+    } catch (err) {}
 
     return () => {
       if (bc) bc.close();
@@ -398,9 +412,11 @@ export function AppProvider({ children }) {
   const endSession = () => {
     if (tableId) {
       localStorage.removeItem(`kn_guest_name_t${tableId}`);
-      setTables((prev) => 
-        prev.map((t) => Number(t.id) === Number(tableId) ? { ...t, status: 'Available', activeGuest: null } : t)
-      );
+      setTables((prev) => {
+        const updated = prev.map((t) => Number(t.id) === Number(tableId) ? { ...t, status: 'Available', activeGuest: null } : t);
+        pushCloudOrders(ordersQueue, updated);
+        return updated;
+      });
     }
     setGuestName('Valued Guest');
     setCart([]);
@@ -429,17 +445,17 @@ export function AppProvider({ children }) {
     setCart([]);
     setCurrentScreen('order-tracker');
 
+    const newQueue = [newOrder, ...ordersQueue];
+    setOrdersQueue(newQueue);
+
+    // Push to Cloud Database (Global Vercel Sync)
+    pushCloudOrders(newQueue, tables);
+
     fetch('/api/orders/place', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ newOrder })
-    })
-    .then((res) => res.json())
-    .then((data) => {
-      if (data.ordersQueue) setOrdersQueue(data.ordersQueue);
-      if (data.tables) setTables(data.tables);
-    })
-    .catch((err) => console.error(err));
+    }).catch(() => {});
   };
 
   const cancelOrder = (orderId) => {
@@ -452,17 +468,17 @@ export function AppProvider({ children }) {
     setCart([]);
     setCurrentScreen('home');
 
+    const newQueue = ordersQueue.map((o) => o.id === orderId ? { ...o, status: 'Cancelled' } : o);
+    setOrdersQueue(newQueue);
+
+    // Push to Cloud Database (Global Vercel Sync)
+    pushCloudOrders(newQueue, tables);
+
     fetch('/api/orders/status', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ orderId, nextStatus: 'Cancelled' })
-    })
-    .then((res) => res.json())
-    .then((data) => {
-      if (data.ordersQueue) setOrdersQueue(data.ordersQueue);
-      if (data.tables) setTables(data.tables);
-    })
-    .catch((err) => console.error(err));
+    }).catch(() => {});
 
     return { success: true, message: 'Order cancelled successfully.' };
   };
@@ -482,17 +498,17 @@ export function AppProvider({ children }) {
   };
 
   const updateOrderStatus = (orderId, nextStatus) => {
+    const newQueue = ordersQueue.map((o) => o.id === orderId ? { ...o, status: nextStatus } : o);
+    setOrdersQueue(newQueue);
+
+    // Push to Cloud Database (Global Vercel Sync)
+    pushCloudOrders(newQueue, tables);
+
     fetch('/api/orders/status', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ orderId, nextStatus })
-    })
-    .then((res) => res.json())
-    .then((data) => {
-      if (data.ordersQueue) setOrdersQueue(data.ordersQueue);
-      if (data.tables) setTables(data.tables);
-    })
-    .catch((err) => console.error(err));
+    }).catch(() => {});
   };
 
   const adminLogin = (password) => {
@@ -509,6 +525,7 @@ export function AppProvider({ children }) {
     setCurrentScreen('welcome');
   };
 
+  // REAL-TIME CLOUD & LOCAL DISH STOCK TOGGLE
   const toggleItemStock = (itemId) => {
     const updatedList = menuItemsList.map((item) => 
       item.id === itemId ? { ...item, inStock: !item.inStock } : item
@@ -516,6 +533,9 @@ export function AppProvider({ children }) {
 
     setMenuItemsList(updatedList);
     localStorage.setItem('kn_menu_items', JSON.stringify(updatedList));
+
+    // Push to Cloud Database for Vercel persistence
+    pushCloudMenu(updatedList);
 
     if (typeof window !== 'undefined' && 'BroadcastChannel' in window) {
       try {
@@ -532,33 +552,43 @@ export function AppProvider({ children }) {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ itemId, inStock: newStock, updatedList })
-    }).catch((err) => console.error(err));
+    }).catch(() => {});
   };
 
+  // REAL-TIME CLOUD & LOCAL PRICE EDIT
   const updateItemPrice = (itemId, newPrice) => {
     const updatedList = menuItemsList.map((item) => 
       item.id === itemId ? { ...item, price: Number(newPrice) } : item
     );
     setMenuItemsList(updatedList);
     localStorage.setItem('kn_menu_items', JSON.stringify(updatedList));
+
+    // Push to Cloud Database for Vercel persistence
+    pushCloudMenu(updatedList);
+
     fetch('/api/menu/stock', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ updatedList })
-    }).catch((err) => console.error(err));
+    }).catch(() => {});
   };
 
+  // REAL-TIME CLOUD & LOCAL MENU ITEM EDIT
   const updateMenuItem = (itemId, updatedFields) => {
     const updatedList = menuItemsList.map((item) => 
       item.id === itemId ? { ...item, ...updatedFields } : item
     );
     setMenuItemsList(updatedList);
     localStorage.setItem('kn_menu_items', JSON.stringify(updatedList));
+
+    // Push to Cloud Database for Vercel persistence
+    pushCloudMenu(updatedList);
+
     fetch('/api/menu/stock', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ updatedList })
-    }).catch((err) => console.error(err));
+    }).catch(() => {});
   };
 
   const removeMenuItemImage = (itemId) => {
@@ -567,11 +597,15 @@ export function AppProvider({ children }) {
     );
     setMenuItemsList(updatedList);
     localStorage.setItem('kn_menu_items', JSON.stringify(updatedList));
+
+    // Push to Cloud Database for Vercel persistence
+    pushCloudMenu(updatedList);
+
     fetch('/api/menu/stock', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ updatedList })
-    }).catch((err) => console.error(err));
+    }).catch(() => {});
   };
 
   const addNewMenuItem = (newItemData) => {
@@ -591,11 +625,15 @@ export function AppProvider({ children }) {
     const updatedList = [newItem, ...menuItemsList];
     setMenuItemsList(updatedList);
     localStorage.setItem('kn_menu_items', JSON.stringify(updatedList));
+
+    // Push to Cloud Database for Vercel persistence
+    pushCloudMenu(updatedList);
+
     fetch('/api/menu/stock', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ updatedList })
-    }).catch((err) => console.error(err));
+    }).catch(() => {});
   };
 
   return (
