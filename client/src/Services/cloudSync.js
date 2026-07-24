@@ -12,9 +12,9 @@ const getHeaders = () => ({
 
 export const fetchCloudMenu = async () => {
   try {
-    const res = await fetch(`${SUPABASE_URL}/rest/v1/kn_store?id=eq.menu&select=data`, {
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/kn_store?id=eq.menu&select=data&_t=${Date.now()}`, {
       headers: getHeaders(),
-      cache: 'no-cache'
+      cache: 'no-store'
     });
     if (res.ok) {
       const rows = await res.json();
@@ -40,9 +40,9 @@ export const pushCloudMenu = async (menuItems) => {
 
 export const fetchCloudOrders = async () => {
   try {
-    const res = await fetch(`${SUPABASE_URL}/rest/v1/kn_store?id=eq.orders&select=data`, {
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/kn_store?id=eq.orders&select=data&_t=${Date.now()}`, {
       headers: getHeaders(),
-      cache: 'no-cache'
+      cache: 'no-store'
     });
     if (res.ok) {
       const rows = await res.json();

@@ -210,7 +210,11 @@ export function AppProvider({ children }) {
   const [isDineIn, setIsDineIn] = useState(true);
   
   const [cart, setCart] = useState([]);
-  const [rawActiveOrder, setRawActiveOrder] = useState(null);
+
+  const [rawActiveOrder, setRawActiveOrder] = useState(() => {
+    const saved = localStorage.getItem('kn_active_order');
+    return saved ? JSON.parse(saved) : null;
+  });
 
   const [ordersQueue, setOrdersQueue] = useState([]);
   const [tables, setTables] = useState(initialTables);
@@ -251,8 +255,8 @@ export function AppProvider({ children }) {
     }
 
     const syncCloudAndLocal = async () => {
-      // 1. Synchronize Menu Items if no local edit occurred in last 2.5 seconds
-      if (Date.now() - lastLocalMenuUpdateRef.current > 2500) {
+      // 1. Synchronize Menu Items if no local edit occurred in last 800ms
+      if (Date.now() - lastLocalMenuUpdateRef.current > 800) {
         const cloudMenu = await fetchCloudMenu();
         if (cloudMenu && Array.isArray(cloudMenu) && cloudMenu.length >= 5) {
           setMenuItemsList([...cloudMenu]);
@@ -262,8 +266,8 @@ export function AppProvider({ children }) {
         }
       }
 
-      // 2. Synchronize Orders & Tables if no local order action occurred in last 2.5 seconds
-      if (Date.now() - lastLocalOrdersUpdateRef.current > 2500) {
+      // 2. Synchronize Orders & Tables if no local order action occurred in last 800ms
+      if (Date.now() - lastLocalOrdersUpdateRef.current > 800) {
         const cloudOrders = await fetchCloudOrders();
         if (cloudOrders) {
           if (Array.isArray(cloudOrders.ordersQueue)) {
@@ -326,6 +330,14 @@ export function AppProvider({ children }) {
   }, [isAdminLoggedIn]);
 
   useEffect(() => {
+    if (rawActiveOrder) {
+      localStorage.setItem('kn_active_order', JSON.stringify(rawActiveOrder));
+    } else {
+      localStorage.removeItem('kn_active_order');
+    }
+  }, [rawActiveOrder]);
+
+  useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const tableParam = params.get('table');
     if (tableParam) {
@@ -384,6 +396,7 @@ export function AppProvider({ children }) {
     setGuestName('Valued Guest');
     setCart([]);
     setRawActiveOrder(null);
+    localStorage.removeItem('kn_active_order');
     setCurrentScreen('welcome');
   };
 
@@ -405,6 +418,7 @@ export function AppProvider({ children }) {
     };
 
     setRawActiveOrder(newOrder);
+    localStorage.setItem('kn_active_order', JSON.stringify(newOrder));
     setCart([]);
     setCurrentScreen('order-tracker');
 
@@ -424,6 +438,7 @@ export function AppProvider({ children }) {
     }
 
     setRawActiveOrder(null);
+    localStorage.removeItem('kn_active_order');
     setCart([]);
     setCurrentScreen('home');
 
