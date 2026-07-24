@@ -8,19 +8,14 @@ import {
 
 const AppContext = createContext();
 
-// Helper to merge Cloud & Local Overrides so stock toggles & custom photos sync live across all devices
-const applyMergedOverrides = (items, cloudStockMap = {}, cloudImageMap = {}) => {
+// Helper to merge Menu items with Cloud Stock & Cloud Image Maps
+const applyCloudOverrides = (items, stockMap = {}, imageMap = {}) => {
   if (!items || !Array.isArray(items)) return items;
-  const localStock = JSON.parse(localStorage.getItem('kn_stock_overrides') || '{}');
-  const localImages = JSON.parse(localStorage.getItem('kn_custom_images') || '{}');
-
-  const mergedStock = { ...cloudStockMap, ...localStock };
-  const mergedImages = { ...cloudImageMap, ...localImages };
 
   return items.map((item) => ({
     ...item,
-    inStock: mergedStock[item.id] !== undefined ? mergedStock[item.id] : item.inStock,
-    customImage: mergedImages[item.id] !== undefined ? mergedImages[item.id] : item.customImage
+    inStock: stockMap[item.id] !== undefined ? stockMap[item.id] : item.inStock,
+    customImage: imageMap[item.id] !== undefined ? imageMap[item.id] : item.customImage
   }));
 };
 
@@ -246,7 +241,7 @@ export function AppProvider({ children }) {
   const [menuItemsList, setMenuItemsList] = useState(() => {
     const saved = localStorage.getItem('kn_menu_items');
     const baseItems = saved ? JSON.parse(saved) : mockMenuItems;
-    return applyMergedOverrides(baseItems);
+    return baseItems;
   });
 
   // DYNAMICALLY COMPUTED LIVE ACTIVE ORDER FROM ORDERS QUEUE
@@ -262,7 +257,7 @@ export function AppProvider({ children }) {
       bc.onmessage = (event) => {
         if (event.data) {
           if (event.data.type === 'SYNC_MENU' && event.data.menuItems) {
-            setMenuItemsList(applyMergedOverrides(event.data.menuItems));
+            setMenuItemsList(event.data.menuItems);
           }
           if (event.data.type === 'SYNC_ORDERS') {
             if (event.data.ordersQueue) setOrdersQueue([...event.data.ordersQueue]);
@@ -289,13 +284,21 @@ export function AppProvider({ children }) {
       const cloudStockMap = await fetchCloudStock();
       const cloudImageMap = await fetchCloudImages();
 
+      // Save Cloud Stock & Images in local storage as Cloud Truth
+      if (cloudStockMap && Object.keys(cloudStockMap).length > 0) {
+        localStorage.setItem('kn_stock_overrides', JSON.stringify(cloudStockMap));
+      }
+      if (cloudImageMap && Object.keys(cloudImageMap).length > 0) {
+        localStorage.setItem('kn_custom_images', JSON.stringify(cloudImageMap));
+      }
+
       // 3. Fetch Cloud Menu Items
       const cloudMenu = await fetchCloudMenu();
       const baseMenu = (cloudMenu && Array.isArray(cloudMenu.items)) 
         ? cloudMenu.items 
         : (Array.isArray(cloudMenu) && cloudMenu.length >= 5 ? cloudMenu : menuItemsList);
 
-      const finalMerged = applyMergedOverrides(baseMenu, cloudStockMap, cloudImageMap);
+      const finalMerged = applyCloudOverrides(baseMenu, cloudStockMap, cloudImageMap);
       setMenuItemsList(finalMerged);
       localStorage.setItem('kn_menu_items', JSON.stringify(finalMerged));
     };
@@ -393,7 +396,7 @@ export function AppProvider({ children }) {
 
   const updateQuantity = (itemId, qty) => {
     if (qty <= 0) {
-      setCart((prevCart) => prevCart.filter((ci) => ci.item.id !== itemId));
+      setCart((prevCart) => prevCart.filter((ci) => ci.item.id === itemId));
     } else {
       setCart((prevCart) => 
         prevCart.map((ci) => ci.item.id === itemId ? { ...ci, quantity: qty } : ci)
@@ -506,26 +509,22 @@ export function AppProvider({ children }) {
 
   // REAL-TIME MODULAR CLOUD & PERMANENT LOCAL DISH STOCK TOGGLE
   const toggleItemStock = async (itemId) => {
-    const stockOverrides = JSON.parse(localStorage.getItem('kn_stock_overrides') || '{}');
+    const cloudStock = await fetchCloudStock();
     const currentItem = menuItemsList.find((i) => i.id === itemId);
     const newStock = currentItem ? !currentItem.inStock : false;
     
-    stockOverrides[itemId] = newStock;
-    localStorage.setItem('kn_stock_overrides', JSON.stringify(stockOverrides));
+    const updatedStockMap = { ...cloudStock, [itemId]: newStock };
+    localStorage.setItem('kn_stock_overrides', JSON.stringify(updatedStockMap));
 
     const updatedList = menuItemsList.map((i) => i.id === itemId ? { ...i, inStock: newStock } : i);
     setMenuItemsList(updatedList);
 
     // Push lightweight stock override map (~1KB) to Supabase Cloud
-    await pushCloudStock(stockOverrides);
+    await pushCloudStock(updatedStockMap);
   };
 
   // REAL-TIME CLOUD & PERMANENT LOCAL PRICE EDIT
   const updateItemPrice = async (itemId, newPrice) => {
-    const priceOverrides = JSON.parse(localStorage.getItem('kn_price_overrides') || '{}');
-    priceOverrides[itemId] = Number(newPrice);
-    localStorage.setItem('kn_price_overrides', JSON.stringify(priceOverrides));
-
     const updatedList = menuItemsList.map((i) => i.id === itemId ? { ...i, price: Number(newPrice) } : i);
     setMenuItemsList(updatedList);
 
@@ -536,19 +535,19 @@ export function AppProvider({ children }) {
   // REAL-TIME MODULAR CLOUD & PERMANENT LOCAL MENU ITEM EDIT (CUSTOM IMAGE INCLUDED)
   const updateMenuItem = async (itemId, updatedFields) => {
     if (updatedFields.customImage) {
-      const imageOverrides = JSON.parse(localStorage.getItem('kn_custom_images') || '{}');
-      imageOverrides[itemId] = updatedFields.customImage;
-      localStorage.setItem('kn_custom_images', JSON.stringify(imageOverrides));
+      const cloudImages = await fetchCloudImages();
+      const updatedImageMap = { ...cloudImages, [itemId]: updatedFields.customImage };
+      localStorage.setItem('kn_custom_images', JSON.stringify(updatedImageMap));
       // Push modular image map (~50KB) to Supabase Cloud
-      await pushCloudImages(imageOverrides);
+      await pushCloudImages(updatedImageMap);
     }
 
     if (updatedFields.inStock !== undefined) {
-      const stockOverrides = JSON.parse(localStorage.getItem('kn_stock_overrides') || '{}');
-      stockOverrides[itemId] = updatedFields.inStock;
-      localStorage.setItem('kn_stock_overrides', JSON.stringify(stockOverrides));
+      const cloudStock = await fetchCloudStock();
+      const updatedStockMap = { ...cloudStock, [itemId]: updatedFields.inStock };
+      localStorage.setItem('kn_stock_overrides', JSON.stringify(updatedStockMap));
       // Push lightweight stock map to Supabase Cloud
-      await pushCloudStock(stockOverrides);
+      await pushCloudStock(updatedStockMap);
     }
 
     const updatedList = menuItemsList.map((item) => 
@@ -563,10 +562,10 @@ export function AppProvider({ children }) {
   };
 
   const removeMenuItemImage = async (itemId) => {
-    const imageOverrides = JSON.parse(localStorage.getItem('kn_custom_images') || '{}');
-    delete imageOverrides[itemId];
-    localStorage.setItem('kn_custom_images', JSON.stringify(imageOverrides));
-    await pushCloudImages(imageOverrides);
+    const cloudImages = await fetchCloudImages();
+    delete cloudImages[itemId];
+    localStorage.setItem('kn_custom_images', JSON.stringify(cloudImages));
+    await pushCloudImages(cloudImages);
 
     const updatedList = menuItemsList.map((item) => 
       item.id === itemId ? { ...item, image: 'table', customImage: null } : item
@@ -593,10 +592,10 @@ export function AppProvider({ children }) {
     };
 
     if (newItem.customImage) {
-      const imageOverrides = JSON.parse(localStorage.getItem('kn_custom_images') || '{}');
-      imageOverrides[newId] = newItem.customImage;
-      localStorage.setItem('kn_custom_images', JSON.stringify(imageOverrides));
-      await pushCloudImages(imageOverrides);
+      const cloudImages = await fetchCloudImages();
+      const updatedImageMap = { ...cloudImages, [newId]: newItem.customImage };
+      localStorage.setItem('kn_custom_images', JSON.stringify(updatedImageMap));
+      await pushCloudImages(updatedImageMap);
     }
 
     const updatedList = [newItem, ...menuItemsList];
