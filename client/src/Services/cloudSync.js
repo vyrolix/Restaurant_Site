@@ -1,4 +1,4 @@
-// High-Speed Modular Supabase Cloud Synchronization Service for Multi-Device Global Sync
+// High-Speed Clean PostgREST Supabase Cloud Synchronization Service
 
 const SUPABASE_URL = 'https://nkqiwnmaqcjulhjlcpqu.supabase.co';
 const SUPABASE_ANON_KEY = 'sb_publishable_BQPy3mX-E0AYAkVCkMDZMg_Xz3_6GO7';
@@ -7,13 +7,14 @@ const getHeaders = () => ({
   'apikey': SUPABASE_ANON_KEY,
   'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
   'Content-Type': 'application/json',
-  'Prefer': 'resolution=merge-duplicates'
+  'Prefer': 'resolution=merge-duplicates',
+  'Cache-Control': 'no-cache, no-store, must-revalidate'
 });
 
 // 1. MENU SYNC
 export const fetchCloudMenu = async () => {
   try {
-    const res = await fetch(`${SUPABASE_URL}/rest/v1/kn_store?id=eq.menu&select=data&_t=${Date.now()}`, {
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/kn_store?id=eq.menu&select=data`, {
       headers: getHeaders(),
       cache: 'no-store'
     });
@@ -38,10 +39,10 @@ export const pushCloudMenu = async (menuItems) => {
   } catch (err) {}
 };
 
-// 2. STOCK OVERRIDES SYNC (Lightweight ~1KB object)
+// 2. STOCK OVERRIDES SYNC
 export const fetchCloudStock = async () => {
   try {
-    const res = await fetch(`${SUPABASE_URL}/rest/v1/kn_store?id=eq.stock_overrides&select=data&_t=${Date.now()}`, {
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/kn_store?id=eq.stock_overrides&select=data`, {
       headers: getHeaders(),
       cache: 'no-store'
     });
@@ -65,10 +66,10 @@ export const pushCloudStock = async (stockMap) => {
   } catch (err) {}
 };
 
-// 3. CUSTOM IMAGES SYNC (Modular ~50KB payload)
+// 3. CUSTOM IMAGES SYNC
 export const fetchCloudImages = async () => {
   try {
-    const res = await fetch(`${SUPABASE_URL}/rest/v1/kn_store?id=eq.custom_images&select=data&_t=${Date.now()}`, {
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/kn_store?id=eq.custom_images&select=data`, {
       headers: getHeaders(),
       cache: 'no-store'
     });
@@ -92,10 +93,10 @@ export const pushCloudImages = async (imagesMap) => {
   } catch (err) {}
 };
 
-// 4. ORDERS SYNC (Lightweight payload ~5KB)
+// 4. ORDERS SYNC
 export const fetchCloudOrders = async () => {
   try {
-    const res = await fetch(`${SUPABASE_URL}/rest/v1/kn_store?id=eq.orders&select=data&_t=${Date.now()}`, {
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/kn_store?id=eq.orders&select=data`, {
       headers: getHeaders(),
       cache: 'no-store'
     });
