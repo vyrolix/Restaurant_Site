@@ -1,20 +1,25 @@
 import React, { useState } from 'react';
 import { useApp } from '../../context/AppContext';
-import { Search, CheckCircle, XCircle, Edit3, Plus, Trash2, Camera, Upload, Link as LinkIcon, Image as ImageIcon, X } from 'lucide-react';
+import { Plus, Edit2, CheckCircle2, XCircle, Search, Trash2, Camera, RefreshCw } from 'lucide-react';
 import steakImg from '../../assets/steak.png';
 import tableImg from '../../assets/table.png';
 import salmonImg from '../../assets/salmon.png';
 import saladImg from '../../assets/salad.png';
 
 export default function MenuManager() {
-  const { menuItems, toggleItemStock, updateMenuItem, removeMenuItemImage, addNewMenuItem } = useApp();
+  const { 
+    menuItems, 
+    toggleItemStock, 
+    updateItemPrice, 
+    updateMenuItem, 
+    removeMenuItemImage, 
+    addNewMenuItem 
+  } = useApp();
+
   const [search, setSearch] = useState('');
-  
-  // Modals
   const [editingItem, setEditingItem] = useState(null);
   const [isAddingNew, setIsAddingNew] = useState(false);
 
-  // Form State
   const [formData, setFormData] = useState({
     name: '',
     price: '',
@@ -26,7 +31,17 @@ export default function MenuManager() {
     isVeg: true
   });
 
+  const categoriesList = [
+    'Breakfast & South Indian',
+    'Chinese',
+    'Tandoor',
+    'Continental',
+    'Indian Main Course',
+    'Desserts & Beverages'
+  ];
+
   const getImageSrc = (item) => {
+    if (!item) return tableImg;
     if (item.customImage) return item.customImage;
     switch (item.image) {
       case 'steak': return steakImg;
@@ -36,12 +51,6 @@ export default function MenuManager() {
       default: return tableImg;
     }
   };
-
-  const filteredItems = menuItems.filter((item) => 
-    item.name.toLowerCase().includes(search.toLowerCase()) ||
-    item.category.toLowerCase().includes(search.toLowerCase()) ||
-    item.subcategory.toLowerCase().includes(search.toLowerCase())
-  );
 
   const openEditModal = (item) => {
     setEditingItem(item);
@@ -71,12 +80,41 @@ export default function MenuManager() {
     });
   };
 
+  // HIGH PERFORMANCE HTML5 CANVAS IMAGE COMPRESSOR (Reduces 8MB phone photo down to 15KB JPEG for fast Cloud Sync)
   const handleFileUpload = (e) => {
     const file = e.target.files[0];
     if (file) {
       const reader = new FileReader();
-      reader.onloadend = () => {
-        setFormData((prev) => ({ ...prev, customImage: reader.result }));
+      reader.onload = (event) => {
+        const img = new Image();
+        img.onload = () => {
+          const canvas = document.createElement('canvas');
+          const MAX_SIZE = 350;
+          let width = img.width;
+          let height = img.height;
+
+          if (width > height) {
+            if (width > MAX_SIZE) {
+              height *= MAX_SIZE / width;
+              width = MAX_SIZE;
+            }
+          } else {
+            if (height > MAX_SIZE) {
+              width *= MAX_SIZE / height;
+              height = MAX_SIZE;
+            }
+          }
+
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext('2d');
+          ctx.drawImage(img, 0, 0, width, height);
+
+          // Highly optimized compressed JPEG data URL (~15KB)
+          const compressedDataUrl = canvas.toDataURL('image/jpeg', 0.7);
+          setFormData((prev) => ({ ...prev, customImage: compressedDataUrl }));
+        };
+        img.src = event.target.result;
       };
       reader.readAsDataURL(file);
     }
@@ -106,6 +144,12 @@ export default function MenuManager() {
     removeMenuItemImage(id);
     setFormData((prev) => ({ ...prev, customImage: '' }));
   };
+
+  const filteredItems = menuItems.filter((item) => 
+    item.name.toLowerCase().includes(search.toLowerCase()) ||
+    item.category.toLowerCase().includes(search.toLowerCase()) ||
+    (item.subcategory && item.subcategory.toLowerCase().includes(search.toLowerCase()))
+  );
 
   return (
     <div className="p-4 space-y-4 font-sans text-xs">
@@ -142,7 +186,7 @@ export default function MenuManager() {
         {filteredItems.map((item) => (
           <div key={item.id} className="p-3 flex justify-between items-center gap-3">
             
-            {/* Dish Thumbnail */}
+            {/* Dish Thumbnail & Camera Trigger */}
             <div className="relative w-12 h-12 rounded-xl overflow-hidden shrink-0 border border-neutral-200 group">
               <img src={getImageSrc(item)} alt={item.name} className="w-full h-full object-cover" />
               <button 
@@ -160,72 +204,121 @@ export default function MenuManager() {
                 <span className="w-2 h-2 rounded-full bg-emerald-600 shrink-0" />
                 <h4 className="font-serif font-bold text-[#06382B] text-xs truncate">{item.name}</h4>
               </div>
-              <span className="text-[9px] text-neutral-400 block truncate">{item.category} • {item.subcategory}</span>
+              <span className="text-[10px] text-neutral-400 truncate block">
+                {item.subcategory} • {item.category}
+              </span>
+              
+              {/* Quick Inline Price Edit */}
+              <div className="flex items-center gap-1 mt-1">
+                <span className="text-neutral-500 font-bold text-[10px]">₹</span>
+                <input 
+                  type="number"
+                  defaultValue={item.price}
+                  onBlur={(e) => {
+                    const newP = Number(e.target.value);
+                    if (newP > 0 && newP !== item.price) {
+                      updateItemPrice(item.id, newP);
+                    }
+                  }}
+                  className="w-16 bg-neutral-50 border border-neutral-200 rounded px-1 py-0.5 font-bold text-[#06382B] text-xs focus:outline-none focus:bg-white"
+                />
+              </div>
             </div>
 
-            {/* Price & Edit Button */}
+            {/* Actions: Edit & Stock Toggle */}
             <div className="flex items-center gap-2 shrink-0">
-              <span className="font-serif font-bold text-[#06382B] text-xs">₹{item.price}</span>
-              
               <button 
                 onClick={() => openEditModal(item)}
-                className="p-1.5 bg-neutral-100 hover:bg-[#06382B] hover:text-[#D4AF37] text-[#06382B] rounded-lg transition-colors cursor-pointer"
-                title="Edit Dish Details"
+                className="p-1.5 bg-neutral-100 hover:bg-neutral-200 text-[#06382B] rounded-lg cursor-pointer transition-colors"
+                title="Full Edit"
               >
-                <Edit3 className="w-3.5 h-3.5" />
+                <Edit2 className="w-3.5 h-3.5" />
+              </button>
+
+              <button 
+                onClick={() => toggleItemStock(item.id)}
+                className={`px-2.5 py-1.5 rounded-xl font-bold text-[10px] flex items-center gap-1 cursor-pointer transition-all duration-200 ${
+                  item.inStock 
+                    ? 'bg-emerald-100 text-emerald-800 border border-emerald-300' 
+                    : 'bg-red-100 text-red-800 border border-red-300'
+                }`}
+              >
+                {item.inStock ? (
+                  <>
+                    <CheckCircle2 className="w-3 h-3 text-emerald-600" /> In Stock
+                  </>
+                ) : (
+                  <>
+                    <XCircle className="w-3 h-3 text-red-600" /> Not Available
+                  </>
+                )}
               </button>
             </div>
 
-            {/* Stock Switch */}
-            <button 
-              onClick={() => toggleItemStock(item.id)}
-              className={`px-2 py-1 rounded-full text-[10px] font-bold shrink-0 transition-colors cursor-pointer flex items-center gap-1 ${
-                item.inStock 
-                  ? 'bg-emerald-100 text-emerald-800 hover:bg-emerald-200' 
-                  : 'bg-red-100 text-red-700 hover:bg-red-200'
-              }`}
-            >
-              {item.inStock ? (
-                <><CheckCircle className="w-3 h-3 text-emerald-600" /> In Stock</>
-              ) : (
-                <><XCircle className="w-3 h-3 text-red-600" /> Out</>
-              )}
-            </button>
           </div>
         ))}
       </div>
 
-      {/* Edit / Add Menu Item Modal */}
+      {/* Edit / Add Modal */}
       {(editingItem || isAddingNew) && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-fade-in overflow-y-auto">
-          <div className="bg-white rounded-3xl p-5 max-w-sm w-full space-y-4 border border-[#06382B]/30 shadow-2xl my-auto">
-            
-            <div className="flex justify-between items-center border-b border-neutral-100 pb-2">
-              <h4 className="font-serif font-bold text-[#06382B] text-sm">
-                {editingItem ? `Edit Dish: ${editingItem.name}` : 'Add New Menu Item'}
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-xs z-50 flex items-center justify-center p-4 animate-fade-in">
+          <div className="bg-[#F7FAF7] w-full max-w-sm rounded-2xl overflow-hidden shadow-2xl border border-[#06382B]/30 flex flex-col max-h-[90vh]">
+            <div className="bg-[#06382B] p-3.5 text-white flex justify-between items-center shrink-0">
+              <h4 className="font-serif font-bold text-sm text-[#D4AF37]">
+                {editingItem ? `Edit: ${editingItem.name}` : 'Add New Gourmet Dish'}
               </h4>
               <button 
-                onClick={() => {
-                  setEditingItem(null);
-                  setIsAddingNew(false);
-                }}
-                className="text-neutral-400 hover:text-red-600 p-1 cursor-pointer"
+                onClick={() => { setEditingItem(null); setIsAddingNew(false); }}
+                className="text-white/70 hover:text-white font-bold text-base cursor-pointer"
               >
-                <X className="w-4 h-4" />
+                &times;
               </button>
             </div>
 
-            <form onSubmit={handleSaveEdit} className="space-y-3">
+            <form onSubmit={handleSaveEdit} className="p-4 space-y-3 overflow-y-auto flex-1">
               
+              {/* Photo Upload Section */}
+              <div className="space-y-1.5 bg-white p-3 rounded-xl border border-neutral-200">
+                <label className="font-bold text-[#06382B] block text-[11px]">Dish Image</label>
+                <div className="flex items-center gap-3">
+                  <div className="w-16 h-16 rounded-xl overflow-hidden bg-neutral-100 border border-neutral-200 shrink-0 relative">
+                    <img 
+                      src={formData.customImage || getImageSrc(formData)} 
+                      alt="Preview" 
+                      className="w-full h-full object-cover" 
+                    />
+                  </div>
+                  <div className="space-y-1 flex-1">
+                    <label className="bg-[#06382B] hover:bg-[#04291F] text-[#D4AF37] px-3 py-1.5 rounded-lg font-bold text-[10px] cursor-pointer inline-flex items-center gap-1 shadow-2xs">
+                      <Camera className="w-3 h-3" /> Select Photo
+                      <input 
+                        type="file" 
+                        accept="image/*" 
+                        onChange={handleFileUpload} 
+                        className="hidden" 
+                      />
+                    </label>
+                    {formData.customImage && (
+                      <button 
+                        type="button"
+                        onClick={() => handleRemoveImage(editingItem?.id)}
+                        className="text-red-600 hover:text-red-800 text-[10px] font-bold block flex items-center gap-0.5 cursor-pointer mt-1"
+                      >
+                        <Trash2 className="w-3 h-3" /> Remove Custom Image
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </div>
+
               {/* Name */}
               <div className="space-y-1">
-                <label className="text-[10px] font-bold text-[#06382B] uppercase">Dish Name</label>
+                <label className="font-bold text-[#06382B] block">Dish Name</label>
                 <input 
                   type="text" 
                   value={formData.name}
                   onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                  placeholder="e.g. Special Paneer Tikka"
-                  className="w-full bg-neutral-50 border border-neutral-200 rounded-xl p-2.5 text-xs text-[#06382B] focus:outline-none focus:ring-1 focus:ring-[#06382B]"
+                  className="w-full bg-white border border-neutral-200 rounded-lg p-2 text-xs focus:outline-none focus:ring-1 focus:ring-[#06382B]"
                   required
                 />
               </div>
@@ -233,152 +326,61 @@ export default function MenuManager() {
               {/* Price & Category */}
               <div className="grid grid-cols-2 gap-2">
                 <div className="space-y-1">
-                  <label className="text-[10px] font-bold text-[#06382B] uppercase">Price (₹)</label>
+                  <label className="font-bold text-[#06382B] block">Price (₹)</label>
                   <input 
                     type="number" 
                     value={formData.price}
                     onChange={(e) => setFormData({ ...formData, price: e.target.value })}
-                    placeholder="199"
-                    className="w-full bg-neutral-50 border border-neutral-200 rounded-xl p-2.5 text-xs text-[#06382B] focus:outline-none focus:ring-1 focus:ring-[#06382B]"
+                    className="w-full bg-white border border-neutral-200 rounded-lg p-2 text-xs focus:outline-none focus:ring-1 focus:ring-[#06382B]"
                     required
                   />
                 </div>
 
                 <div className="space-y-1">
-                  <label className="text-[10px] font-bold text-[#06382B] uppercase">Category</label>
-                  <select 
-                    value={formData.category}
-                    onChange={(e) => setFormData({ ...formData, category: e.target.value })}
-                    className="w-full bg-neutral-50 border border-neutral-200 rounded-xl p-2.5 text-xs text-[#06382B] focus:outline-none"
-                  >
-                    <option>Breakfast & South Indian</option>
-                    <option>Chinese</option>
-                    <option>Tandoor</option>
-                    <option>Continental</option>
-                    <option>Indian Main Course</option>
-                    <option>Desserts & Beverages</option>
-                  </select>
+                  <label className="font-bold text-[#06382B] block">Subcategory</label>
+                  <input 
+                    type="text" 
+                    value={formData.subcategory}
+                    onChange={(e) => setFormData({ ...formData, subcategory: e.target.value })}
+                    placeholder="e.g. Starters"
+                    className="w-full bg-white border border-neutral-200 rounded-lg p-2 text-xs focus:outline-none focus:ring-1 focus:ring-[#06382B]"
+                  />
                 </div>
+              </div>
+
+              {/* Main Category */}
+              <div className="space-y-1">
+                <label className="font-bold text-[#06382B] block">Main Category</label>
+                <select 
+                  value={formData.category}
+                  onChange={(e) => setFormData({ ...formData, category: e.target.value })}
+                  className="w-full bg-white border border-neutral-200 rounded-lg p-2 text-xs focus:outline-none focus:ring-1 focus:ring-[#06382B]"
+                >
+                  {categoriesList.map((cat) => (
+                    <option key={cat} value={cat}>{cat}</option>
+                  ))}
+                </select>
               </div>
 
               {/* Description */}
               <div className="space-y-1">
-                <label className="text-[10px] font-bold text-[#06382B] uppercase">Short Description</label>
-                <input 
-                  type="text" 
+                <label className="font-bold text-[#06382B] block">Description</label>
+                <textarea 
                   value={formData.description}
                   onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                  placeholder="Fresh ingredients, aromatic spices..."
-                  className="w-full bg-neutral-50 border border-neutral-200 rounded-xl p-2.5 text-xs text-[#06382B] focus:outline-none focus:ring-1 focus:ring-[#06382B]"
+                  className="w-full bg-white border border-neutral-200 rounded-lg p-2 text-xs focus:outline-none focus:ring-1 focus:ring-[#06382B] h-16"
+                  required
                 />
               </div>
 
-              {/* Dish Image Management Section */}
-              <div className="space-y-2 pt-1 border-t border-neutral-100">
-                <label className="text-[10px] font-bold text-[#06382B] uppercase flex justify-between items-center">
-                  <span>Dish Image Options</span>
-                  {editingItem && (
-                    <button 
-                      type="button"
-                      onClick={() => handleRemoveImage(editingItem.id)}
-                      className="text-red-600 hover:text-red-800 text-[9px] font-bold flex items-center gap-1 cursor-pointer"
-                    >
-                      <Trash2 className="w-3 h-3" /> Remove Photo
-                    </button>
-                  )}
-                </label>
-
-                {/* Current Image Preview */}
-                <div className="flex items-center gap-3 bg-neutral-50 p-2.5 rounded-xl border border-neutral-200">
-                  <div className="w-12 h-12 rounded-lg overflow-hidden shrink-0 border border-neutral-300">
-                    <img 
-                      src={formData.customImage || getImageSrc(formData)} 
-                      alt="Preview" 
-                      className="w-full h-full object-cover" 
-                    />
-                  </div>
-                  <div className="flex-1 min-w-0 text-[10px]">
-                    <span className="font-bold text-[#06382B] block">Active Preview</span>
-                    <span className="text-neutral-400 truncate block">
-                      {formData.customImage ? 'Custom Upload / URL' : `Preset (${formData.image})`}
-                    </span>
-                  </div>
-                </div>
-
-                {/* Option 1: File Upload */}
-                <div className="space-y-1">
-                  <span className="text-[9px] text-neutral-500 font-semibold block">Option A: Upload Image File</span>
-                  <label className="flex items-center justify-center gap-2 w-full bg-white border border-dashed border-[#06382B]/40 rounded-xl p-2.5 text-xs font-bold text-[#06382B] cursor-pointer hover:bg-[#06382B]/5 transition-colors">
-                    <Upload className="w-4 h-4 text-[#D4AF37]" /> Upload Local Photo
-                    <input type="file" accept="image/*" onChange={handleFileUpload} className="hidden" />
-                  </label>
-                </div>
-
-                {/* Option 2: Image URL */}
-                <div className="space-y-1">
-                  <span className="text-[9px] text-neutral-500 font-semibold block">Option B: Paste Image Web URL</span>
-                  <div className="relative">
-                    <LinkIcon className="w-3.5 h-3.5 text-neutral-400 absolute left-3 top-3" />
-                    <input 
-                      type="url" 
-                      placeholder="https://images.unsplash.com/photo..."
-                      value={formData.customImage}
-                      onChange={(e) => setFormData({ ...formData, customImage: e.target.value })}
-                      className="w-full bg-neutral-50 border border-neutral-200 rounded-xl py-2 pl-9 pr-3 text-xs text-[#06382B] focus:outline-none"
-                    />
-                  </div>
-                </div>
-
-                {/* Option 3: Presets */}
-                <div className="space-y-1">
-                  <span className="text-[9px] text-neutral-500 font-semibold block">Option C: Select Preset Photo</span>
-                  <div className="grid grid-cols-4 gap-1.5">
-                    {[
-                      { key: 'steak', label: 'Paneer' },
-                      { key: 'table', label: 'South' },
-                      { key: 'salmon', label: 'Pizza' },
-                      { key: 'salad', label: 'Salad' }
-                    ].map((p) => (
-                      <button
-                        key={p.key}
-                        type="button"
-                        onClick={() => setFormData({ ...formData, image: p.key, customImage: '' })}
-                        className={`py-1 px-2 rounded-lg text-[9px] font-bold transition-all border cursor-pointer ${
-                          formData.image === p.key && !formData.customImage
-                            ? 'bg-[#06382B] text-[#D4AF37] border-[#06382B]'
-                            : 'bg-white text-neutral-600 border-neutral-200'
-                        }`}
-                      >
-                        {p.label}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-              </div>
-
-              {/* Action Buttons */}
-              <div className="flex gap-2 pt-2 border-t border-neutral-100">
-                <button 
-                  type="button"
-                  onClick={() => {
-                    setEditingItem(null);
-                    setIsAddingNew(false);
-                  }}
-                  className="flex-1 bg-neutral-100 text-neutral-700 py-3 rounded-xl font-bold text-xs hover:bg-neutral-200 cursor-pointer"
-                >
-                  Cancel
-                </button>
-                <button 
-                  type="submit"
-                  className="flex-[2] bg-[#06382B] hover:bg-[#04291F] text-[#D4AF37] py-3 rounded-xl font-bold text-xs shadow-md cursor-pointer border border-[#D4AF37]/30 transition-transform active:scale-95"
-                >
-                  Save Changes
-                </button>
-              </div>
-
+              {/* Save Button */}
+              <button 
+                type="submit"
+                className="w-full bg-[#06382B] hover:bg-[#04291F] text-[#D4AF37] py-2.5 rounded-xl font-bold text-xs shadow-md cursor-pointer transition-transform active:scale-95 border border-[#D4AF37]/30 mt-2"
+              >
+                Save & Broadcast Changes
+              </button>
             </form>
-
           </div>
         </div>
       )}
