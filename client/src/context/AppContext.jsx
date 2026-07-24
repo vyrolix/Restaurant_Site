@@ -223,7 +223,11 @@ export function AppProvider({ children }) {
     return saved ? JSON.parse(saved) : mockMenuItems;
   });
 
-  // HIGH SPEED CLOUD & LOCAL REAL-TIME SYNC FOR VERCEL & LOCALHOST
+  // TIMESTAMP GUARD REF TO PREVENT OVERWRITING RECENT LOCAL ACTIONS
+  const lastLocalMenuUpdateRef = useRef(0);
+  const lastLocalOrdersUpdateRef = useRef(0);
+
+  // HIGH SPEED CLOUD REAL-TIME SYNC (1-SECOND POLLING WITH TIMESTAMP GUARD)
   useEffect(() => {
     let bc;
     if (typeof window !== 'undefined' && 'BroadcastChannel' in window) {
@@ -242,28 +246,35 @@ export function AppProvider({ children }) {
     }
 
     const syncCloudAndLocal = async () => {
-      // 1. Fetch Cloud DB Menu Items (Persists globally across Vercel)
-      const cloudMenu = await fetchCloudMenu();
-      if (cloudMenu && Array.isArray(cloudMenu) && cloudMenu.length > 5) {
-        setMenuItemsList(cloudMenu);
-        localStorage.setItem('kn_menu_items', JSON.stringify(cloudMenu));
-      } else {
-        // If Supabase is empty or unseeded, seed the full menu list
-        pushCloudMenu(mockMenuItems);
+      // 1. Synchronize Menu Items if no local edit occurred in last 3 seconds
+      if (Date.now() - lastLocalMenuUpdateRef.current > 3000) {
+        const cloudMenu = await fetchCloudMenu();
+        if (cloudMenu && Array.isArray(cloudMenu) && cloudMenu.length >= 5) {
+          setMenuItemsList(cloudMenu);
+          localStorage.setItem('kn_menu_items', JSON.stringify(cloudMenu));
+        } else if (!cloudMenu) {
+          pushCloudMenu(mockMenuItems);
+        }
       }
 
-      // 2. Fetch Cloud DB Orders & Tables (Persists globally across Vercel)
-      const cloudOrders = await fetchCloudOrders();
-      if (cloudOrders) {
-        if (cloudOrders.ordersQueue) setOrdersQueue(cloudOrders.ordersQueue);
-        if (cloudOrders.tables) setTables(cloudOrders.tables);
+      // 2. Synchronize Orders & Tables if no local order action occurred in last 3 seconds
+      if (Date.now() - lastLocalOrdersUpdateRef.current > 3000) {
+        const cloudOrders = await fetchCloudOrders();
+        if (cloudOrders) {
+          if (Array.isArray(cloudOrders.ordersQueue)) {
+            setOrdersQueue(cloudOrders.ordersQueue);
+          }
+          if (Array.isArray(cloudOrders.tables) && cloudOrders.tables.length > 0) {
+            setTables(cloudOrders.tables);
+          }
+        }
       }
     };
 
     // Initial Fetch
     syncCloudAndLocal();
 
-    // Fast 1-second Polling for Global Vercel Sync
+    // 1-second Polling for Multi-Network Sync
     const intervalId = setInterval(syncCloudAndLocal, 1000);
 
     return () => {
@@ -272,7 +283,7 @@ export function AppProvider({ children }) {
     };
   }, []);
 
-  // OS & ANDROID HARDWARE BACK BUTTON STEP-BY-STEP HISTORY NAVIGATION HANDLER
+  // OS & ANDROID HARDWARE BACK BUTTON HISTORY NAVIGATION HANDLER
   useEffect(() => {
     if (!window.history.state || !window.history.state.screen) {
       window.history.replaceState({ screen: 'welcome', index: 0 }, '', '');
@@ -360,6 +371,7 @@ export function AppProvider({ children }) {
       localStorage.removeItem(`kn_guest_name_t${tableId}`);
       setTables((prev) => {
         const updated = prev.map((t) => Number(t.id) === Number(tableId) ? { ...t, status: 'Available', activeGuest: null } : t);
+        lastLocalOrdersUpdateRef.current = Date.now();
         pushCloudOrders(ordersQueue, updated);
         return updated;
       });
@@ -391,6 +403,8 @@ export function AppProvider({ children }) {
     setCart([]);
     setCurrentScreen('order-tracker');
 
+    // Update timestamp guard & orders queue
+    lastLocalOrdersUpdateRef.current = Date.now();
     const newQueue = [newOrder, ...ordersQueue];
     setOrdersQueue(newQueue);
 
@@ -408,6 +422,7 @@ export function AppProvider({ children }) {
     setCart([]);
     setCurrentScreen('home');
 
+    lastLocalOrdersUpdateRef.current = Date.now();
     const newQueue = ordersQueue.map((o) => o.id === orderId ? { ...o, status: 'Cancelled' } : o);
     setOrdersQueue(newQueue);
 
@@ -432,6 +447,7 @@ export function AppProvider({ children }) {
   };
 
   const updateOrderStatus = (orderId, nextStatus) => {
+    lastLocalOrdersUpdateRef.current = Date.now();
     const newQueue = ordersQueue.map((o) => o.id === orderId ? { ...o, status: nextStatus } : o);
     setOrdersQueue(newQueue);
 
@@ -455,6 +471,7 @@ export function AppProvider({ children }) {
 
   // REAL-TIME CLOUD & LOCAL DISH STOCK TOGGLE
   const toggleItemStock = (itemId) => {
+    lastLocalMenuUpdateRef.current = Date.now();
     const updatedList = menuItemsList.map((item) => 
       item.id === itemId ? { ...item, inStock: !item.inStock } : item
     );
@@ -464,21 +481,15 @@ export function AppProvider({ children }) {
 
     // Push to Supabase Cloud Database (Global Multi-Network Vercel Sync)
     pushCloudMenu(updatedList);
-
-    if (typeof window !== 'undefined' && 'BroadcastChannel' in window) {
-      try {
-        const bc = new BroadcastChannel('kn_restaurant_realtime_sync');
-        bc.postMessage({ type: 'SYNC_MENU', menuItems: updatedList });
-        bc.close();
-      } catch (err) {}
-    }
   };
 
   // REAL-TIME CLOUD & LOCAL PRICE EDIT
   const updateItemPrice = (itemId, newPrice) => {
+    lastLocalMenuUpdateRef.current = Date.now();
     const updatedList = menuItemsList.map((item) => 
       item.id === itemId ? { ...item, price: Number(newPrice) } : item
     );
+
     setMenuItemsList(updatedList);
     localStorage.setItem('kn_menu_items', JSON.stringify(updatedList));
 
@@ -488,9 +499,11 @@ export function AppProvider({ children }) {
 
   // REAL-TIME CLOUD & LOCAL MENU ITEM EDIT
   const updateMenuItem = (itemId, updatedFields) => {
+    lastLocalMenuUpdateRef.current = Date.now();
     const updatedList = menuItemsList.map((item) => 
       item.id === itemId ? { ...item, ...updatedFields } : item
     );
+
     setMenuItemsList(updatedList);
     localStorage.setItem('kn_menu_items', JSON.stringify(updatedList));
 
@@ -499,9 +512,11 @@ export function AppProvider({ children }) {
   };
 
   const removeMenuItemImage = (itemId) => {
+    lastLocalMenuUpdateRef.current = Date.now();
     const updatedList = menuItemsList.map((item) => 
       item.id === itemId ? { ...item, image: 'table', customImage: null } : item
     );
+
     setMenuItemsList(updatedList);
     localStorage.setItem('kn_menu_items', JSON.stringify(updatedList));
 
@@ -510,6 +525,7 @@ export function AppProvider({ children }) {
   };
 
   const addNewMenuItem = (newItemData) => {
+    lastLocalMenuUpdateRef.current = Date.now();
     const newId = `custom-${Date.now()}`;
     const newItem = {
       id: newId,
@@ -523,6 +539,7 @@ export function AppProvider({ children }) {
       isVeg: newItemData.isVeg !== false,
       inStock: true
     };
+
     const updatedList = [newItem, ...menuItemsList];
     setMenuItemsList(updatedList);
     localStorage.setItem('kn_menu_items', JSON.stringify(updatedList));
