@@ -1,4 +1,4 @@
-// Official Direct Supabase Cloud Synchronization Service for Multi-Device & Cross-Network Deployment
+// Official Direct Supabase Cloud Synchronization Service with Version Timestamping
 
 const SUPABASE_URL = 'https://nkqiwnmaqcjulhjlcpqu.supabase.co';
 const SUPABASE_ANON_KEY = 'sb_publishable_BQPy3mX-E0AYAkVCkMDZMg_Xz3_6GO7';
@@ -18,24 +18,34 @@ export const fetchCloudMenu = async () => {
     });
     if (res.ok) {
       const rows = await res.json();
-      if (rows && rows.length > 0 && Array.isArray(rows[0].data) && rows[0].data.length >= 5) {
-        return rows[0].data;
+      if (rows && rows.length > 0 && rows[0].data) {
+        return rows[0].data; // returns { updatedAt, items } or Array
       }
     }
   } catch (err) {}
   return null;
 };
 
-export const pushCloudMenu = async (menuItems) => {
+export const pushCloudMenu = async (menuItems, updatedAt = Date.now()) => {
   if (!menuItems || !Array.isArray(menuItems) || menuItems.length < 5) return;
   
+  const payload = {
+    updatedAt,
+    items: menuItems
+  };
+
   try {
-    await fetch(`${SUPABASE_URL}/rest/v1/kn_store?on_conflict=id`, {
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/kn_store?on_conflict=id`, {
       method: 'POST',
       headers: getHeaders(),
-      body: JSON.stringify([{ id: 'menu', data: menuItems }])
+      body: JSON.stringify([{ id: 'menu', data: payload }])
     });
-  } catch (err) {}
+    if (!res.ok) {
+      console.warn('Cloud menu push returned status:', res.status);
+    }
+  } catch (err) {
+    console.error('Cloud menu push failed:', err);
+  }
 };
 
 export const fetchCloudOrders = async () => {
@@ -46,20 +56,31 @@ export const fetchCloudOrders = async () => {
     });
     if (res.ok) {
       const rows = await res.json();
-      if (rows && rows.length > 0 && rows[0].data && Array.isArray(rows[0].data.ordersQueue)) {
-        return rows[0].data;
+      if (rows && rows.length > 0 && rows[0].data) {
+        return rows[0].data; // returns { updatedAt, ordersQueue, tables }
       }
     }
   } catch (err) {}
   return null;
 };
 
-export const pushCloudOrders = async (ordersQueue, tables) => {
+export const pushCloudOrders = async (ordersQueue, tables, updatedAt = Date.now()) => {
+  const payload = {
+    updatedAt,
+    ordersQueue,
+    tables
+  };
+
   try {
-    await fetch(`${SUPABASE_URL}/rest/v1/kn_store?on_conflict=id`, {
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/kn_store?on_conflict=id`, {
       method: 'POST',
       headers: getHeaders(),
-      body: JSON.stringify([{ id: 'orders', data: { ordersQueue, tables, updatedAt: Date.now() } }])
+      body: JSON.stringify([{ id: 'orders', data: payload }])
     });
-  } catch (err) {}
+    if (!res.ok) {
+      console.warn('Cloud orders push returned status:', res.status);
+    }
+  } catch (err) {
+    console.error('Cloud orders push failed:', err);
+  }
 };
