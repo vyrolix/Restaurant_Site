@@ -3,16 +3,24 @@
 @import "tailwindcss";
 
 @theme {
-  --color-restaurant-green: #062F21;
-  --color-restaurant-cream: #F7F6F3;
-  --color-restaurant-gold: #C5A880;
-  --color-restaurant-dark: #1C1C1C;
+  --color-brand-darkest: #051F20;
+  --color-brand-dark: #0B2B26;
+  --color-brand-medium: #163832;
+  --color-brand-green: #235347;
+  --color-brand-sage: #8EB69B;
+  --color-brand-light: #E3EFE6;
+
+  /* Backward compatibility aliases */
+  --color-restaurant-green: #051F20;
+  --color-restaurant-cream: #E3EFE6;
+  --color-restaurant-gold: #8EB69B;
+  --color-restaurant-dark: #0B2B26;
 
   --font-serif: "Playfair Display", Georgia, serif;
   --font-sans: "Inter", sans-serif;
 }
 
-/* Global Reset for App-like Standalone Feel */
+/* Global Reset & Palette Gradient Background */
 html, body, #root {
   margin: 0;
   padding: 0;
@@ -20,10 +28,9 @@ html, body, #root {
   height: 100%;
   max-height: 100dvh;
   overflow: hidden;
-  background-color: #0f100f; /* Dark background to frame the card on desktop */
+  background: linear-gradient(135deg, #051F20 0%, #0B2B26 50%, #163832 100%);
 }
 
-/* Safe Area Insets for Modern Mobile Notches */
 body {
   font-family: 'Inter', sans-serif;
   padding-top: env(safe-area-inset-top, 0px);
@@ -53,11 +60,11 @@ body {
 
 @keyframes pulseGlow {
   0%, 100% {
-    box-shadow: 0 4px 20px -2px rgba(197, 168, 128, 0.3), 0 0 0 1px rgba(197, 168, 128, 0.1);
+    box-shadow: 0 4px 20px -2px rgba(142, 182, 155, 0.4), 0 0 0 1px rgba(142, 182, 155, 0.2);
     transform: scale(1);
   }
   50% {
-    box-shadow: 0 8px 30px 2px rgba(197, 168, 128, 0.5), 0 0 0 1.5px rgba(197, 168, 128, 0.2);
+    box-shadow: 0 8px 30px 2px rgba(142, 182, 155, 0.6), 0 0 0 2px rgba(142, 182, 155, 0.4);
     transform: scale(1.015);
   }
 }
@@ -76,22 +83,21 @@ body {
   animation: pulseGlow 4s ease-in-out infinite;
 }
 
-.delay-100 {
-  animation-delay: 100ms;
+.delay-100 { animation-delay: 100ms; }
+.delay-200 { animation-delay: 200ms; }
+.delay-300 { animation-delay: 300ms; }
+.delay-400 { animation-delay: 400ms; }
+.delay-500 { animation-delay: 500ms; }
+
+/* Custom Gradient Utilities */
+.bg-palette-gradient {
+  background: linear-gradient(145deg, #051F20 0%, #0B2B26 40%, #163832 75%, #235347 100%);
 }
 
-.delay-200 {
-  animation-delay: 200ms;
+.bg-palette-light-gradient {
+  background: linear-gradient(180deg, #E3EFE6 0%, #D6E6DA 100%);
 }
 
-.delay-300 {
-  animation-delay: 300ms;
-}
-
-.delay-400 {
-  animation-delay: 400ms;
-}
-
-.delay-500 {
-  animation-delay: 500ms;
+.bg-card-gradient {
+  background: linear-gradient(135deg, #0B2B26 0%, #163832 100%);
 }
