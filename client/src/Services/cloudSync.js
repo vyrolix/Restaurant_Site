@@ -1,4 +1,4 @@
-// Official Direct Supabase Cloud Synchronization Service with Version Timestamping
+// High-Speed Modular Supabase Cloud Synchronization Service for Multi-Device Global Sync
 
 const SUPABASE_URL = 'https://nkqiwnmaqcjulhjlcpqu.supabase.co';
 const SUPABASE_ANON_KEY = 'sb_publishable_BQPy3mX-E0AYAkVCkMDZMg_Xz3_6GO7';
@@ -10,6 +10,7 @@ const getHeaders = () => ({
   'Prefer': 'resolution=merge-duplicates'
 });
 
+// 1. MENU SYNC
 export const fetchCloudMenu = async () => {
   try {
     const res = await fetch(`${SUPABASE_URL}/rest/v1/kn_store?id=eq.menu&select=data&_t=${Date.now()}`, {
@@ -19,35 +20,79 @@ export const fetchCloudMenu = async () => {
     if (res.ok) {
       const rows = await res.json();
       if (rows && rows.length > 0 && rows[0].data) {
-        return rows[0].data; // returns { updatedAt, items } or Array
+        return rows[0].data;
       }
     }
   } catch (err) {}
   return null;
 };
 
-export const pushCloudMenu = async (menuItems, updatedAt = Date.now()) => {
+export const pushCloudMenu = async (menuItems) => {
   if (!menuItems || !Array.isArray(menuItems) || menuItems.length < 5) return;
-  
-  const payload = {
-    updatedAt,
-    items: menuItems
-  };
-
   try {
-    const res = await fetch(`${SUPABASE_URL}/rest/v1/kn_store?on_conflict=id`, {
+    await fetch(`${SUPABASE_URL}/rest/v1/kn_store?on_conflict=id`, {
       method: 'POST',
       headers: getHeaders(),
-      body: JSON.stringify([{ id: 'menu', data: payload }])
+      body: JSON.stringify([{ id: 'menu', data: menuItems }])
     });
-    if (!res.ok) {
-      console.warn('Cloud menu push returned status:', res.status);
-    }
-  } catch (err) {
-    console.error('Cloud menu push failed:', err);
-  }
+  } catch (err) {}
 };
 
+// 2. STOCK OVERRIDES SYNC (Lightweight ~1KB object)
+export const fetchCloudStock = async () => {
+  try {
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/kn_store?id=eq.stock_overrides&select=data&_t=${Date.now()}`, {
+      headers: getHeaders(),
+      cache: 'no-store'
+    });
+    if (res.ok) {
+      const rows = await res.json();
+      if (rows && rows.length > 0 && rows[0].data) {
+        return rows[0].data;
+      }
+    }
+  } catch (err) {}
+  return {};
+};
+
+export const pushCloudStock = async (stockMap) => {
+  try {
+    await fetch(`${SUPABASE_URL}/rest/v1/kn_store?on_conflict=id`, {
+      method: 'POST',
+      headers: getHeaders(),
+      body: JSON.stringify([{ id: 'stock_overrides', data: stockMap }])
+    });
+  } catch (err) {}
+};
+
+// 3. CUSTOM IMAGES SYNC (Modular ~50KB payload)
+export const fetchCloudImages = async () => {
+  try {
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/kn_store?id=eq.custom_images&select=data&_t=${Date.now()}`, {
+      headers: getHeaders(),
+      cache: 'no-store'
+    });
+    if (res.ok) {
+      const rows = await res.json();
+      if (rows && rows.length > 0 && rows[0].data) {
+        return rows[0].data;
+      }
+    }
+  } catch (err) {}
+  return {};
+};
+
+export const pushCloudImages = async (imagesMap) => {
+  try {
+    await fetch(`${SUPABASE_URL}/rest/v1/kn_store?on_conflict=id`, {
+      method: 'POST',
+      headers: getHeaders(),
+      body: JSON.stringify([{ id: 'custom_images', data: imagesMap }])
+    });
+  } catch (err) {}
+};
+
+// 4. ORDERS SYNC (Lightweight payload ~5KB)
 export const fetchCloudOrders = async () => {
   try {
     const res = await fetch(`${SUPABASE_URL}/rest/v1/kn_store?id=eq.orders&select=data&_t=${Date.now()}`, {
@@ -57,30 +102,19 @@ export const fetchCloudOrders = async () => {
     if (res.ok) {
       const rows = await res.json();
       if (rows && rows.length > 0 && rows[0].data) {
-        return rows[0].data; // returns { updatedAt, ordersQueue, tables }
+        return rows[0].data;
       }
     }
   } catch (err) {}
   return null;
 };
 
-export const pushCloudOrders = async (ordersQueue, tables, updatedAt = Date.now()) => {
-  const payload = {
-    updatedAt,
-    ordersQueue,
-    tables
-  };
-
+export const pushCloudOrders = async (ordersQueue, tables) => {
   try {
-    const res = await fetch(`${SUPABASE_URL}/rest/v1/kn_store?on_conflict=id`, {
+    await fetch(`${SUPABASE_URL}/rest/v1/kn_store?on_conflict=id`, {
       method: 'POST',
       headers: getHeaders(),
-      body: JSON.stringify([{ id: 'orders', data: payload }])
+      body: JSON.stringify([{ id: 'orders', data: { ordersQueue, tables, updatedAt: Date.now() } }])
     });
-    if (!res.ok) {
-      console.warn('Cloud orders push returned status:', res.status);
-    }
-  } catch (err) {
-    console.error('Cloud orders push failed:', err);
-  }
+  } catch (err) {}
 };

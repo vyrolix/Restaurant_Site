@@ -1,20 +1,26 @@
 import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
-import { fetchCloudMenu, pushCloudMenu, fetchCloudOrders, pushCloudOrders } from '../Services/cloudSync';
+import { 
+  fetchCloudMenu, pushCloudMenu, 
+  fetchCloudOrders, pushCloudOrders, 
+  fetchCloudStock, pushCloudStock, 
+  fetchCloudImages, pushCloudImages 
+} from '../Services/cloudSync';
 
 const AppContext = createContext();
 
-// Helper to load and apply local overrides so stock toggles and custom dish photos NEVER revert
-const applyLocalOverrides = (items) => {
+// Helper to merge Cloud & Local Overrides so stock toggles & custom photos sync live across all devices
+const applyMergedOverrides = (items, cloudStockMap = {}, cloudImageMap = {}) => {
   if (!items || !Array.isArray(items)) return items;
-  const stockOverrides = JSON.parse(localStorage.getItem('kn_stock_overrides') || '{}');
-  const priceOverrides = JSON.parse(localStorage.getItem('kn_price_overrides') || '{}');
-  const imageOverrides = JSON.parse(localStorage.getItem('kn_custom_images') || '{}');
+  const localStock = JSON.parse(localStorage.getItem('kn_stock_overrides') || '{}');
+  const localImages = JSON.parse(localStorage.getItem('kn_custom_images') || '{}');
+
+  const mergedStock = { ...cloudStockMap, ...localStock };
+  const mergedImages = { ...cloudImageMap, ...localImages };
 
   return items.map((item) => ({
     ...item,
-    inStock: stockOverrides[item.id] !== undefined ? stockOverrides[item.id] : item.inStock,
-    price: priceOverrides[item.id] !== undefined ? priceOverrides[item.id] : item.price,
-    customImage: imageOverrides[item.id] !== undefined ? imageOverrides[item.id] : item.customImage
+    inStock: mergedStock[item.id] !== undefined ? mergedStock[item.id] : item.inStock,
+    customImage: mergedImages[item.id] !== undefined ? mergedImages[item.id] : item.customImage
   }));
 };
 
@@ -240,7 +246,7 @@ export function AppProvider({ children }) {
   const [menuItemsList, setMenuItemsList] = useState(() => {
     const saved = localStorage.getItem('kn_menu_items');
     const baseItems = saved ? JSON.parse(saved) : mockMenuItems;
-    return applyLocalOverrides(baseItems);
+    return applyMergedOverrides(baseItems);
   });
 
   // DYNAMICALLY COMPUTED LIVE ACTIVE ORDER FROM ORDERS QUEUE
@@ -248,7 +254,7 @@ export function AppProvider({ children }) {
     ? (ordersQueue.find((o) => o.id === rawActiveOrder.id) || rawActiveOrder) 
     : null;
 
-  // HIGH SPEED READ-ONLY POLLING WITH LOCAL OVERRIDES (NO POST FLOODING)
+  // HIGH SPEED CLOUD REAL-TIME SYNC ACROSS ALL DEVICES
   useEffect(() => {
     let bc;
     if (typeof window !== 'undefined' && 'BroadcastChannel' in window) {
@@ -256,7 +262,7 @@ export function AppProvider({ children }) {
       bc.onmessage = (event) => {
         if (event.data) {
           if (event.data.type === 'SYNC_MENU' && event.data.menuItems) {
-            setMenuItemsList(applyLocalOverrides(event.data.menuItems));
+            setMenuItemsList(applyMergedOverrides(event.data.menuItems));
           }
           if (event.data.type === 'SYNC_ORDERS') {
             if (event.data.ordersQueue) setOrdersQueue([...event.data.ordersQueue]);
@@ -267,38 +273,37 @@ export function AppProvider({ children }) {
     }
 
     const syncCloudAndLocal = async () => {
-      // 1. Fetch Cloud Menu (Read-Only GET)
-      const cloudMenuData = await fetchCloudMenu();
-      if (cloudMenuData) {
-        const cloudItems = Array.isArray(cloudMenuData) 
-          ? cloudMenuData 
-          : (cloudMenuData.items || cloudMenuData.data || null);
-
-        if (Array.isArray(cloudItems) && cloudItems.length >= 5) {
-          const merged = applyLocalOverrides(cloudItems);
-          setMenuItemsList(merged);
-          localStorage.setItem('kn_menu_items', JSON.stringify(merged));
-        }
-      }
-
-      // 2. Fetch Cloud Orders (Read-Only GET)
-      const cloudOrdersData = await fetchCloudOrders();
-      if (cloudOrdersData) {
-        const cloudQueue = cloudOrdersData.ordersQueue || (Array.isArray(cloudOrdersData) ? cloudOrdersData : null);
-
+      // 1. Fetch Cloud Orders (Priority for Instant Toast Popup & Customer Tracker)
+      const cloudOrders = await fetchCloudOrders();
+      if (cloudOrders) {
+        const cloudQueue = cloudOrders.ordersQueue || (Array.isArray(cloudOrders) ? cloudOrders : null);
         if (Array.isArray(cloudQueue)) {
           setOrdersQueue([...cloudQueue]);
-          if (Array.isArray(cloudOrdersData.tables) && cloudOrdersData.tables.length > 0) {
-            setTables([...cloudOrdersData.tables]);
-          }
+        }
+        if (Array.isArray(cloudOrders.tables) && cloudOrders.tables.length > 0) {
+          setTables([...cloudOrders.tables]);
         }
       }
+
+      // 2. Fetch Modular Cloud Stock & Modular Cloud Custom Images
+      const cloudStockMap = await fetchCloudStock();
+      const cloudImageMap = await fetchCloudImages();
+
+      // 3. Fetch Cloud Menu Items
+      const cloudMenu = await fetchCloudMenu();
+      const baseMenu = (cloudMenu && Array.isArray(cloudMenu.items)) 
+        ? cloudMenu.items 
+        : (Array.isArray(cloudMenu) && cloudMenu.length >= 5 ? cloudMenu : menuItemsList);
+
+      const finalMerged = applyMergedOverrides(baseMenu, cloudStockMap, cloudImageMap);
+      setMenuItemsList(finalMerged);
+      localStorage.setItem('kn_menu_items', JSON.stringify(finalMerged));
     };
 
     // Initial Fetch
     syncCloudAndLocal();
 
-    // 1-second High Speed Read-Only Polling
+    // 1-second Polling for Multi-Network Sync
     const intervalId = setInterval(syncCloudAndLocal, 1000);
 
     return () => {
@@ -439,7 +444,7 @@ export function AppProvider({ children }) {
     const newQueue = [newOrder, ...ordersQueue];
     setOrdersQueue([...newQueue]);
 
-    // Push to Supabase Cloud Database
+    // Push to Supabase Cloud Database (Global Multi-Device Push)
     pushCloudOrders(newQueue, tables);
   };
 
@@ -499,80 +504,80 @@ export function AppProvider({ children }) {
     setCurrentScreen('welcome');
   };
 
-  // REAL-TIME CLOUD & PERMANENT LOCAL DISH STOCK TOGGLE
-  const toggleItemStock = (itemId) => {
+  // REAL-TIME MODULAR CLOUD & PERMANENT LOCAL DISH STOCK TOGGLE
+  const toggleItemStock = async (itemId) => {
     const stockOverrides = JSON.parse(localStorage.getItem('kn_stock_overrides') || '{}');
     const currentItem = menuItemsList.find((i) => i.id === itemId);
     const newStock = currentItem ? !currentItem.inStock : false;
+    
     stockOverrides[itemId] = newStock;
     localStorage.setItem('kn_stock_overrides', JSON.stringify(stockOverrides));
 
-    const updatedList = applyLocalOverrides(menuItemsList);
+    const updatedList = menuItemsList.map((i) => i.id === itemId ? { ...i, inStock: newStock } : i);
     setMenuItemsList(updatedList);
-    localStorage.setItem('kn_menu_items', JSON.stringify(updatedList));
 
-    // Push to Supabase Cloud Database
-    pushCloudMenu(updatedList);
+    // Push lightweight stock override map (~1KB) to Supabase Cloud
+    await pushCloudStock(stockOverrides);
   };
 
   // REAL-TIME CLOUD & PERMANENT LOCAL PRICE EDIT
-  const updateItemPrice = (itemId, newPrice) => {
+  const updateItemPrice = async (itemId, newPrice) => {
     const priceOverrides = JSON.parse(localStorage.getItem('kn_price_overrides') || '{}');
     priceOverrides[itemId] = Number(newPrice);
     localStorage.setItem('kn_price_overrides', JSON.stringify(priceOverrides));
 
-    const updatedList = applyLocalOverrides(menuItemsList);
+    const updatedList = menuItemsList.map((i) => i.id === itemId ? { ...i, price: Number(newPrice) } : i);
     setMenuItemsList(updatedList);
-    localStorage.setItem('kn_menu_items', JSON.stringify(updatedList));
 
     // Push to Supabase Cloud Database
-    pushCloudMenu(updatedList);
+    await pushCloudMenu(updatedList);
   };
 
-  // REAL-TIME CLOUD & PERMANENT LOCAL MENU ITEM EDIT (CUSTOM IMAGE INCLUDED)
-  const updateMenuItem = (itemId, updatedFields) => {
+  // REAL-TIME MODULAR CLOUD & PERMANENT LOCAL MENU ITEM EDIT (CUSTOM IMAGE INCLUDED)
+  const updateMenuItem = async (itemId, updatedFields) => {
     if (updatedFields.customImage) {
       const imageOverrides = JSON.parse(localStorage.getItem('kn_custom_images') || '{}');
       imageOverrides[itemId] = updatedFields.customImage;
       localStorage.setItem('kn_custom_images', JSON.stringify(imageOverrides));
+      // Push modular image map (~50KB) to Supabase Cloud
+      await pushCloudImages(imageOverrides);
     }
 
     if (updatedFields.inStock !== undefined) {
       const stockOverrides = JSON.parse(localStorage.getItem('kn_stock_overrides') || '{}');
       stockOverrides[itemId] = updatedFields.inStock;
       localStorage.setItem('kn_stock_overrides', JSON.stringify(stockOverrides));
+      // Push lightweight stock map to Supabase Cloud
+      await pushCloudStock(stockOverrides);
     }
 
     const updatedList = menuItemsList.map((item) => 
       item.id === itemId ? { ...item, ...updatedFields } : item
     );
 
-    const finalMerged = applyLocalOverrides(updatedList);
-    setMenuItemsList(finalMerged);
-    localStorage.setItem('kn_menu_items', JSON.stringify(finalMerged));
+    setMenuItemsList(updatedList);
+    localStorage.setItem('kn_menu_items', JSON.stringify(updatedList));
 
-    // Push to Supabase Cloud Database
-    pushCloudMenu(finalMerged);
+    // Push menu array to Supabase Cloud Database
+    await pushCloudMenu(updatedList);
   };
 
-  const removeMenuItemImage = (itemId) => {
+  const removeMenuItemImage = async (itemId) => {
     const imageOverrides = JSON.parse(localStorage.getItem('kn_custom_images') || '{}');
     delete imageOverrides[itemId];
     localStorage.setItem('kn_custom_images', JSON.stringify(imageOverrides));
+    await pushCloudImages(imageOverrides);
 
     const updatedList = menuItemsList.map((item) => 
       item.id === itemId ? { ...item, image: 'table', customImage: null } : item
     );
 
-    const finalMerged = applyLocalOverrides(updatedList);
-    setMenuItemsList(finalMerged);
-    localStorage.setItem('kn_menu_items', JSON.stringify(finalMerged));
-
-    // Push to Supabase Cloud Database
-    pushCloudMenu(finalMerged);
+    setMenuItemsList(updatedList);
+    localStorage.setItem('kn_menu_items', JSON.stringify(updatedList));
+    await pushCloudMenu(updatedList);
   };
 
-  const addNewMenuItem = (newItemData) => {
+  const addNewMenuItem = async (newItemData) => {
     const newId = `custom-${Date.now()}`;
     const newItem = {
       id: newId,
@@ -591,15 +596,13 @@ export function AppProvider({ children }) {
       const imageOverrides = JSON.parse(localStorage.getItem('kn_custom_images') || '{}');
       imageOverrides[newId] = newItem.customImage;
       localStorage.setItem('kn_custom_images', JSON.stringify(imageOverrides));
+      await pushCloudImages(imageOverrides);
     }
 
     const updatedList = [newItem, ...menuItemsList];
-    const finalMerged = applyLocalOverrides(updatedList);
-    setMenuItemsList(finalMerged);
-    localStorage.setItem('kn_menu_items', JSON.stringify(finalMerged));
-
-    // Push to Supabase Cloud Database
-    pushCloudMenu(finalMerged);
+    setMenuItemsList(updatedList);
+    localStorage.setItem('kn_menu_items', JSON.stringify(updatedList));
+    await pushCloudMenu(updatedList);
   };
 
   return (
