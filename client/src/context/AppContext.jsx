@@ -268,17 +268,30 @@ export function AppProvider({ children }) {
     }
 
     const syncCloudAndLocal = async () => {
-      // 1. Fetch Cloud Orders (Priority for Instant Toast Popup & Customer Tracker)
+      // 1. Fetch Cloud Orders
       const cloudOrders = await fetchCloudOrders();
+      let currentCloudQueue = [];
       if (cloudOrders) {
-        const cloudQueue = cloudOrders.ordersQueue || (Array.isArray(cloudOrders) ? cloudOrders : null);
-        if (Array.isArray(cloudQueue)) {
-          setOrdersQueue([...cloudQueue]);
-        }
+        currentCloudQueue = cloudOrders.ordersQueue || (Array.isArray(cloudOrders) ? cloudOrders : []);
         if (Array.isArray(cloudOrders.tables) && cloudOrders.tables.length > 0) {
           setTables([...cloudOrders.tables]);
         }
       }
+
+      // AUTOMATIC SELF-HEALING: If local customer has rawActiveOrder missing from Cloud, inject & sync to Cloud!
+      const activeSaved = localStorage.getItem('kn_active_order');
+      if (activeSaved) {
+        try {
+          const activeObj = JSON.parse(activeSaved);
+          if (activeObj && activeObj.id && !currentCloudQueue.some((o) => o.id === activeObj.id)) {
+            currentCloudQueue = [activeObj, ...currentCloudQueue];
+            // Push missing active order to cloud
+            pushCloudOrders(currentCloudQueue, tables);
+          }
+        } catch (e) {}
+      }
+
+      setOrdersQueue([...currentCloudQueue]);
 
       // 2. Fetch Modular Cloud Stock & Modular Cloud Custom Images
       const cloudStockMap = await fetchCloudStock();
@@ -422,8 +435,8 @@ export function AppProvider({ children }) {
     setCurrentScreen('welcome');
   };
 
-  // ATOMIC MERGE PLACE ORDER (Fetch latest Cloud Orders first to avoid overwriting existing orders)
-  const placeOrder = async () => {
+  // INSTANT NON-BLOCKING PLACE ORDER
+  const placeOrder = () => {
     if (cart.length === 0) return;
     
     const totals = calculateCartTotals();
@@ -440,27 +453,30 @@ export function AppProvider({ children }) {
       tax: totals.tax
     };
 
+    // 1. Instantly update customer state & UI
     setRawActiveOrder(newOrder);
     localStorage.setItem('kn_active_order', JSON.stringify(newOrder));
     setCart([]);
     setCurrentScreen('order-tracker');
 
-    // 1. Fetch latest Cloud Orders to merge safely
-    const cloudOrders = await fetchCloudOrders();
-    const existingQueue = (cloudOrders && Array.isArray(cloudOrders.ordersQueue)) ? cloudOrders.ordersQueue : ordersQueue;
+    // 2. Immediately merge order in local queue and trigger state update
+    const updatedQueue = [newOrder, ...ordersQueue.filter((o) => o.id !== newOrder.id)];
+    setOrdersQueue(updatedQueue);
 
-    const mergedQueue = [newOrder, ...existingQueue.filter((o) => o.id !== newOrder.id)];
-    setOrdersQueue([...mergedQueue]);
+    // 3. Fire non-blocking push to Supabase Cloud Database & BroadcastChannel
+    if (typeof window !== 'undefined' && 'BroadcastChannel' in window) {
+      try {
+        const bc = new BroadcastChannel('kn_restaurant_realtime_sync');
+        bc.postMessage({ type: 'SYNC_ORDERS', ordersQueue: updatedQueue });
+        bc.close();
+      } catch (e) {}
+    }
 
-    // 2. Push merged queue to Supabase Cloud
-    await pushCloudOrders(mergedQueue, tables);
+    pushCloudOrders(updatedQueue, tables);
   };
 
-  const cancelOrder = async (orderId) => {
-    const cloudOrders = await fetchCloudOrders();
-    const existingQueue = (cloudOrders && Array.isArray(cloudOrders.ordersQueue)) ? cloudOrders.ordersQueue : ordersQueue;
-
-    const targetOrder = existingQueue.find((o) => o.id === orderId);
+  const cancelOrder = (orderId) => {
+    const targetOrder = ordersQueue.find((o) => o.id === orderId);
     if (targetOrder && targetOrder.status !== 'Pending') {
       return { success: false, message: 'Order cannot be cancelled after kitchen acceptance.' };
     }
@@ -470,11 +486,11 @@ export function AppProvider({ children }) {
     setCart([]);
     setCurrentScreen('home');
 
-    const updatedQueue = existingQueue.map((o) => o.id === orderId ? { ...o, status: 'Cancelled' } : o);
+    const updatedQueue = ordersQueue.map((o) => o.id === orderId ? { ...o, status: 'Cancelled' } : o);
     setOrdersQueue([...updatedQueue]);
 
     // Push updated queue to Supabase Cloud Database
-    await pushCloudOrders(updatedQueue, tables);
+    pushCloudOrders(updatedQueue, tables);
 
     return { success: true, message: 'Order cancelled successfully.' };
   };
@@ -493,16 +509,13 @@ export function AppProvider({ children }) {
     };
   };
 
-  // ATOMIC MERGE UPDATE ORDER STATUS (Fetch latest Cloud Orders first)
-  const updateOrderStatus = async (orderId, nextStatus) => {
-    const cloudOrders = await fetchCloudOrders();
-    const existingQueue = (cloudOrders && Array.isArray(cloudOrders.ordersQueue)) ? cloudOrders.ordersQueue : ordersQueue;
-
-    const updatedQueue = existingQueue.map((o) => o.id === orderId ? { ...o, status: nextStatus } : o);
+  // INSTANT UPDATE ORDER STATUS
+  const updateOrderStatus = (orderId, nextStatus) => {
+    const updatedQueue = ordersQueue.map((o) => o.id === orderId ? { ...o, status: nextStatus } : o);
     setOrdersQueue([...updatedQueue]);
 
     // Push updated queue to Supabase Cloud Database
-    await pushCloudOrders(updatedQueue, tables);
+    pushCloudOrders(updatedQueue, tables);
   };
 
   const adminLogin = (password) => {
