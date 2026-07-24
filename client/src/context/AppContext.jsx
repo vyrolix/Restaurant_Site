@@ -518,10 +518,24 @@ export function AppProvider({ children }) {
     pushCloudOrders(updatedQueue, tables);
   };
 
-  const adminLogin = () => {
-    setIsAdminLoggedIn(true);
-    setCurrentScreen('admin-dashboard');
-    return true;
+  const ADMIN_HASH = 'd58da41e0f5515574c3045d5a2047f88b127cb9de1ccbbde2bf57f23f987d69c';
+
+  const sha256 = async (str) => {
+    const msgBuffer = new TextEncoder().encode(str);
+    const hashBuffer = await crypto.subtle.digest('SHA-256', msgBuffer);
+    const hashArray = Array.from(new Uint8Array(hashBuffer));
+    return hashArray.map((b) => b.toString(16).padStart(2, '0')).join('');
+  };
+
+  const adminLogin = async (inputPassword) => {
+    if (!inputPassword) return false;
+    const computedHash = await sha256(inputPassword);
+    if (computedHash === ADMIN_HASH) {
+      setIsAdminLoggedIn(true);
+      setCurrentScreen('admin-dashboard');
+      return true;
+    }
+    return false;
   };
 
   const adminLogout = () => {
