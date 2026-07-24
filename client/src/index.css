@@ -3,41 +3,47 @@
 @import "tailwindcss";
 
 @theme {
-  --color-brand-darkest: #051F20;
-  --color-brand-dark: #0B2B26;
-  --color-brand-medium: #163832;
-  --color-brand-green: #235347;
-  --color-brand-sage: #8EB69B;
-  --color-brand-light: #E3EFE6;
-
-  /* Backward compatibility aliases */
-  --color-restaurant-green: #051F20;
-  --color-restaurant-cream: #E3EFE6;
-  --color-restaurant-gold: #8EB69B;
-  --color-restaurant-dark: #0B2B26;
+  --color-brand-emerald: #06382B;
+  --color-brand-dark-emerald: #04291F;
+  --color-brand-gold: #D4AF37;
+  --color-brand-light-mint: #E8F2EC;
 
   --font-serif: "Playfair Display", Georgia, serif;
   --font-sans: "Inter", sans-serif;
 }
 
-/* Global Reset & Palette Gradient Background */
-html, body, #root {
+/* Android & Mobile Browser Pull-To-Refresh Enablement */
+html {
   margin: 0;
   padding: 0;
   width: 100%;
   height: 100%;
-  max-height: 100dvh;
-  overflow: hidden;
-  background: linear-gradient(135deg, #051F20 0%, #0B2B26 50%, #163832 100%);
+  overscroll-behavior-y: auto;
+  -webkit-overflow-scrolling: touch;
 }
 
 body {
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  height: 100%;
   font-family: 'Inter', sans-serif;
+  overscroll-behavior-y: auto;
+  -webkit-overflow-scrolling: touch;
+  background: linear-gradient(135deg, #04291F 0%, #06382B 50%, #0B4A3A 100%);
   padding-top: env(safe-area-inset-top, 0px);
   padding-bottom: env(safe-area-inset-bottom, 0px);
 }
 
-/* Custom CSS Keyframe Animations */
+#root {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+/* Keyframe Animations */
 @keyframes fadeUp {
   from {
     opacity: 0;
@@ -49,55 +55,31 @@ body {
   }
 }
 
-@keyframes floatCollage {
-  0%, 100% {
-    transform: translateY(0px) scale(1);
-  }
-  50% {
-    transform: translateY(-8px) scale(1.005);
-  }
-}
-
 @keyframes pulseGlow {
   0%, 100% {
-    box-shadow: 0 4px 20px -2px rgba(142, 182, 155, 0.4), 0 0 0 1px rgba(142, 182, 155, 0.2);
+    box-shadow: 0 4px 20px -2px rgba(6, 56, 43, 0.4), 0 0 0 1px rgba(212, 175, 55, 0.3);
     transform: scale(1);
   }
   50% {
-    box-shadow: 0 8px 30px 2px rgba(142, 182, 155, 0.6), 0 0 0 2px rgba(142, 182, 155, 0.4);
+    box-shadow: 0 8px 30px 2px rgba(212, 175, 55, 0.6), 0 0 0 2px rgba(212, 175, 55, 0.5);
     transform: scale(1.015);
   }
 }
 
-/* Helper Animation Utility Classes */
 .animate-fade-up {
   opacity: 0;
   animation: fadeUp 0.8s cubic-bezier(0.16, 1, 0.3, 1) forwards;
-}
-
-.animate-float-collage {
-  animation: floatCollage 7s ease-in-out infinite;
 }
 
 .animate-pulse-glow {
   animation: pulseGlow 4s ease-in-out infinite;
 }
 
-.delay-100 { animation-delay: 100ms; }
-.delay-200 { animation-delay: 200ms; }
-.delay-300 { animation-delay: 300ms; }
-.delay-400 { animation-delay: 400ms; }
-.delay-500 { animation-delay: 500ms; }
-
 /* Custom Gradient Utilities */
 .bg-palette-gradient {
-  background: linear-gradient(145deg, #051F20 0%, #0B2B26 40%, #163832 75%, #235347 100%);
+  background: linear-gradient(145deg, #04291F 0%, #06382B 45%, #0B4A3A 100%);
 }
 
 .bg-palette-light-gradient {
-  background: linear-gradient(180deg, #E3EFE6 0%, #D6E6DA 100%);
-}
-
-.bg-card-gradient {
-  background: linear-gradient(135deg, #0B2B26 0%, #163832 100%);
+  background: linear-gradient(180deg, #F7FAF7 0%, #EBF2EC 100%);
 }

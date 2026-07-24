@@ -1,67 +1,69 @@
 import React, { useState } from 'react';
 import { useApp } from '../../context/AppContext';
-import { UtensilsCrossed } from 'lucide-react';
+import MobileContainer from '../../components/MobileContainer';
+import { UtensilsCrossed, ArrowRight } from 'lucide-react';
 
 export default function SessionCreate() {
-  const { tableId, startSession } = useApp();
+  const { tableId, setGuestName, setCurrentScreen } = useApp();
   const [name, setName] = useState('');
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    if (name.trim()) {
-      startSession(name);
+    const finalName = name.trim() || 'Valued Guest';
+    setGuestName(finalName);
+    if (tableId) {
+      localStorage.setItem(`kn_guest_name_t${tableId}`, finalName);
     }
+    setCurrentScreen('home');
   };
 
   return (
-    <div className="h-[100dvh] w-full bg-palette-gradient flex items-center justify-center p-0 sm:p-4 font-sans overflow-hidden">
-      <div className="w-full max-w-md bg-palette-light-gradient shadow-2xl h-[100dvh] sm:h-[850px] sm:rounded-[36px] overflow-hidden flex flex-col justify-between p-6 pb-12 animate-fade-up border border-[#8EB69B]/20">
-        
-        {/* Header Icon */}
-        <div className="flex-1 flex flex-col items-center justify-center text-center space-y-6">
-          <div className="w-20 h-20 bg-[#0B2B26]/10 rounded-full flex items-center justify-center text-[#0B2B26] animate-bounce">
+    <MobileContainer>
+      <div className="flex-1 flex flex-col justify-between p-6 bg-[#F7FAF7] overflow-y-auto">
+        <div className="flex-1 flex flex-col items-center justify-center text-center space-y-5 my-auto">
+          <div className="w-20 h-20 bg-[#06382B] text-[#D4AF37] rounded-3xl flex items-center justify-center shadow-xl border border-[#D4AF37]/40 animate-bounce">
             <UtensilsCrossed className="w-10 h-10" />
           </div>
           
           <div className="space-y-2">
-            <span className="bg-[#0B2B26] text-[#8EB69B] px-4 py-1.5 rounded-full text-xs font-semibold uppercase tracking-wider">
-              Table {tableId} Detected
+            <span className="bg-[#06382B] text-[#D4AF37] px-4 py-1.5 rounded-full text-xs font-bold uppercase tracking-wider border border-[#D4AF37]/30 shadow-xs">
+              Table {tableId || 1} Selected
             </span>
-            <h1 className="font-serif text-[#051F20] text-3xl font-bold pt-2">
-              Start Dining Experience
+            <h1 className="font-serif text-[#06382B] text-3xl font-bold pt-1">
+              Welcome to Fine Dining
             </h1>
-            <p className="text-[#163832] text-sm max-w-[280px] mx-auto">
-              Please enter your name below so we can attach your active session to Table {tableId}.
+            <p className="text-neutral-500 text-xs max-w-[280px] mx-auto leading-relaxed">
+              Please enter your name below to personalize your dining experience.
             </p>
           </div>
         </div>
 
-        {/* Input Form */}
-        <form onSubmit={handleSubmit} className="w-full space-y-5">
-          <div className="space-y-1">
-            <label className="text-xs uppercase tracking-wider text-[#235347] font-semibold pl-1">
-              Guest Name
+        <form onSubmit={handleSubmit} className="w-full space-y-4 pb-6">
+          <div className="space-y-1.5">
+            <label className="text-[11px] uppercase tracking-wider text-[#06382B] font-bold pl-1">
+              Your Name
             </label>
             <input 
               type="text" 
-              placeholder="e.g. John Doe"
+              placeholder="e.g. Gaurav Sharma"
               value={name}
               onChange={(e) => setName(e.target.value)}
-              className="w-full bg-white border border-[#8EB69B]/50 rounded-2xl py-4 px-5 text-[#051F20] placeholder-[#8EB69B]/70 focus:outline-none focus:ring-2 focus:ring-[#8EB69B] focus:border-[#235347] transition-all duration-200 text-[15px]"
+              className="w-full bg-white border border-neutral-300 rounded-2xl py-4 px-5 text-[#06382B] placeholder-neutral-400 focus:outline-none focus:ring-2 focus:ring-[#D4AF37] font-semibold text-base shadow-2xs"
               maxLength={25}
               required
+              autoFocus
             />
           </div>
 
           <button 
             type="submit"
-            className="w-full bg-[#0B2B26] hover:bg-[#163832] text-[#E3EFE6] py-4 rounded-full font-semibold shadow-lg transition-all duration-300 transform active:scale-95 cursor-pointer text-[15px] border border-[#8EB69B]/20"
+            className="w-full bg-[#06382B] hover:bg-[#04291F] text-[#D4AF37] py-4 rounded-full font-bold shadow-lg transition-all duration-300 transform active:scale-95 cursor-pointer text-sm border border-[#D4AF37]/40 flex items-center justify-center gap-2"
           >
-            Start Dining
+            <span>Continue</span>
+            <ArrowRight className="w-4 h-4" />
           </button>
         </form>
-
       </div>
-    </div>
+    </MobileContainer>
   );
 }
