@@ -20,7 +20,7 @@ export const fetchCloudMenu = async () => {
     });
     if (res.ok) {
       const rows = await res.json();
-      if (rows && rows.length > 0 && Array.isArray(rows[0].data)) {
+      if (rows && rows.length > 0 && Array.isArray(rows[0].data) && rows[0].data.length > 5) {
         return rows[0].data;
       }
     }
@@ -29,7 +29,7 @@ export const fetchCloudMenu = async () => {
 };
 
 export const pushCloudMenu = async (menuItems) => {
-  if (!menuItems || menuItems.length === 0) return;
+  if (!menuItems || !Array.isArray(menuItems) || menuItems.length < 5) return;
   try {
     await fetch(`${SUPABASE_URL}/rest/v1/kn_store?on_conflict=id`, {
       method: 'POST',

@@ -244,14 +244,12 @@ export function AppProvider({ children }) {
     const syncCloudAndLocal = async () => {
       // 1. Fetch Cloud DB Menu Items (Persists globally across Vercel)
       const cloudMenu = await fetchCloudMenu();
-      if (cloudMenu && Array.isArray(cloudMenu)) {
+      if (cloudMenu && Array.isArray(cloudMenu) && cloudMenu.length > 5) {
         setMenuItemsList(cloudMenu);
         localStorage.setItem('kn_menu_items', JSON.stringify(cloudMenu));
       } else {
-        const savedMenu = localStorage.getItem('kn_menu_items');
-        if (savedMenu) {
-          try { setMenuItemsList(JSON.parse(savedMenu)); } catch (err) {}
-        }
+        // If Supabase is empty or unseeded, seed the full menu list
+        pushCloudMenu(mockMenuItems);
       }
 
       // 2. Fetch Cloud DB Orders & Tables (Persists globally across Vercel)
@@ -265,66 +263,14 @@ export function AppProvider({ children }) {
     // Initial Fetch
     syncCloudAndLocal();
 
-    // Fast 1.5s Polling for Vercel Global Sync
-    const intervalId = setInterval(syncCloudAndLocal, 1500);
-
-    // Initial Fetch from Express API (Localhost)
-    fetch('/api/orders')
-      .then((res) => res.json())
-      .then((data) => {
-        if (data.ordersQueue) setOrdersQueue(data.ordersQueue);
-        if (data.tables) setTables(data.tables);
-        if (data.menuItems) {
-          setMenuItemsList(data.menuItems);
-          localStorage.setItem('kn_menu_items', JSON.stringify(data.menuItems));
-        }
-      })
-      .catch(() => {});
-
-    // Open Server-Sent Events (SSE) Stream
-    let eventSource;
-    try {
-      eventSource = new EventSource('/api/stream');
-
-      eventSource.onmessage = (event) => {
-        try {
-          const data = JSON.parse(event.data);
-          
-          if (data.menuItems) {
-            setMenuItemsList(data.menuItems);
-            localStorage.setItem('kn_menu_items', JSON.stringify(data.menuItems));
-          }
-
-          if (data.ordersQueue) {
-            setOrdersQueue(data.ordersQueue);
-
-            if (activeOrder) {
-              const updated = data.ordersQueue.find((o) => o.id === activeOrder.id);
-              if (updated) {
-                setActiveOrder(updated);
-                if (updated.status === 'Served' || updated.status === 'Session Closed') {
-                  setTimeout(() => {
-                    setActiveOrder(null);
-                    setCart([]);
-                    setCurrentScreenState('welcome');
-                  }, 3000);
-                }
-              } else if (activeOrder.status === 'Pending') {
-                setActiveOrder(null);
-              }
-            }
-          }
-          if (data.tables) setTables(data.tables);
-        } catch (err) {}
-      };
-    } catch (err) {}
+    // Fast 1-second Polling for Global Vercel Sync
+    const intervalId = setInterval(syncCloudAndLocal, 1000);
 
     return () => {
       if (bc) bc.close();
-      if (eventSource) eventSource.close();
       clearInterval(intervalId);
     };
-  }, [activeOrder?.id]);
+  }, []);
 
   // OS & ANDROID HARDWARE BACK BUTTON STEP-BY-STEP HISTORY NAVIGATION HANDLER
   useEffect(() => {
@@ -448,14 +394,8 @@ export function AppProvider({ children }) {
     const newQueue = [newOrder, ...ordersQueue];
     setOrdersQueue(newQueue);
 
-    // Push to Cloud Database (Global Vercel Sync)
+    // Push to Supabase Cloud Database (Global Multi-Network Vercel Sync)
     pushCloudOrders(newQueue, tables);
-
-    fetch('/api/orders/place', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ newOrder })
-    }).catch(() => {});
   };
 
   const cancelOrder = (orderId) => {
@@ -471,14 +411,8 @@ export function AppProvider({ children }) {
     const newQueue = ordersQueue.map((o) => o.id === orderId ? { ...o, status: 'Cancelled' } : o);
     setOrdersQueue(newQueue);
 
-    // Push to Cloud Database (Global Vercel Sync)
+    // Push to Supabase Cloud Database (Global Multi-Network Vercel Sync)
     pushCloudOrders(newQueue, tables);
-
-    fetch('/api/orders/status', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ orderId, nextStatus: 'Cancelled' })
-    }).catch(() => {});
 
     return { success: true, message: 'Order cancelled successfully.' };
   };
@@ -501,14 +435,8 @@ export function AppProvider({ children }) {
     const newQueue = ordersQueue.map((o) => o.id === orderId ? { ...o, status: nextStatus } : o);
     setOrdersQueue(newQueue);
 
-    // Push to Cloud Database (Global Vercel Sync)
+    // Push to Supabase Cloud Database (Global Multi-Network Vercel Sync)
     pushCloudOrders(newQueue, tables);
-
-    fetch('/api/orders/status', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ orderId, nextStatus })
-    }).catch(() => {});
   };
 
   const adminLogin = (password) => {
@@ -534,7 +462,7 @@ export function AppProvider({ children }) {
     setMenuItemsList(updatedList);
     localStorage.setItem('kn_menu_items', JSON.stringify(updatedList));
 
-    // Push to Cloud Database for Vercel persistence
+    // Push to Supabase Cloud Database (Global Multi-Network Vercel Sync)
     pushCloudMenu(updatedList);
 
     if (typeof window !== 'undefined' && 'BroadcastChannel' in window) {
@@ -544,15 +472,6 @@ export function AppProvider({ children }) {
         bc.close();
       } catch (err) {}
     }
-
-    const targetItem = menuItemsList.find((i) => i.id === itemId);
-    const newStock = targetItem ? !targetItem.inStock : false;
-
-    fetch('/api/menu/stock', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ itemId, inStock: newStock, updatedList })
-    }).catch(() => {});
   };
 
   // REAL-TIME CLOUD & LOCAL PRICE EDIT
@@ -563,14 +482,8 @@ export function AppProvider({ children }) {
     setMenuItemsList(updatedList);
     localStorage.setItem('kn_menu_items', JSON.stringify(updatedList));
 
-    // Push to Cloud Database for Vercel persistence
+    // Push to Supabase Cloud Database (Global Multi-Network Vercel Sync)
     pushCloudMenu(updatedList);
-
-    fetch('/api/menu/stock', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ updatedList })
-    }).catch(() => {});
   };
 
   // REAL-TIME CLOUD & LOCAL MENU ITEM EDIT
@@ -581,14 +494,8 @@ export function AppProvider({ children }) {
     setMenuItemsList(updatedList);
     localStorage.setItem('kn_menu_items', JSON.stringify(updatedList));
 
-    // Push to Cloud Database for Vercel persistence
+    // Push to Supabase Cloud Database (Global Multi-Network Vercel Sync)
     pushCloudMenu(updatedList);
-
-    fetch('/api/menu/stock', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ updatedList })
-    }).catch(() => {});
   };
 
   const removeMenuItemImage = (itemId) => {
@@ -598,14 +505,8 @@ export function AppProvider({ children }) {
     setMenuItemsList(updatedList);
     localStorage.setItem('kn_menu_items', JSON.stringify(updatedList));
 
-    // Push to Cloud Database for Vercel persistence
+    // Push to Supabase Cloud Database (Global Multi-Network Vercel Sync)
     pushCloudMenu(updatedList);
-
-    fetch('/api/menu/stock', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ updatedList })
-    }).catch(() => {});
   };
 
   const addNewMenuItem = (newItemData) => {
@@ -626,14 +527,8 @@ export function AppProvider({ children }) {
     setMenuItemsList(updatedList);
     localStorage.setItem('kn_menu_items', JSON.stringify(updatedList));
 
-    // Push to Cloud Database for Vercel persistence
+    // Push to Supabase Cloud Database (Global Multi-Network Vercel Sync)
     pushCloudMenu(updatedList);
-
-    fetch('/api/menu/stock', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ updatedList })
-    }).catch(() => {});
   };
 
   return (
