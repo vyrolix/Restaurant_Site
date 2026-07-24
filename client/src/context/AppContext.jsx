@@ -210,7 +210,7 @@ export function AppProvider({ children }) {
   const [isDineIn, setIsDineIn] = useState(true);
   
   const [cart, setCart] = useState([]);
-  const [activeOrder, setActiveOrder] = useState(null);
+  const [rawActiveOrder, setRawActiveOrder] = useState(null);
 
   const [ordersQueue, setOrdersQueue] = useState([]);
   const [tables, setTables] = useState(initialTables);
@@ -222,6 +222,11 @@ export function AppProvider({ children }) {
     const saved = localStorage.getItem('kn_menu_items');
     return saved ? JSON.parse(saved) : mockMenuItems;
   });
+
+  // DYNAMICALLY COMPUTED LIVE ACTIVE ORDER FROM ORDERS QUEUE
+  const activeOrder = rawActiveOrder 
+    ? (ordersQueue.find((o) => o.id === rawActiveOrder.id) || rawActiveOrder) 
+    : null;
 
   // TIMESTAMP GUARD REF TO PREVENT OVERWRITING RECENT LOCAL ACTIONS
   const lastLocalMenuUpdateRef = useRef(0);
@@ -378,7 +383,7 @@ export function AppProvider({ children }) {
     }
     setGuestName('Valued Guest');
     setCart([]);
-    setActiveOrder(null);
+    setRawActiveOrder(null);
     setCurrentScreen('welcome');
   };
 
@@ -399,7 +404,7 @@ export function AppProvider({ children }) {
       tax: totals.tax
     };
 
-    setActiveOrder(newOrder);
+    setRawActiveOrder(newOrder);
     setCart([]);
     setCurrentScreen('order-tracker');
 
@@ -418,7 +423,7 @@ export function AppProvider({ children }) {
       return { success: false, message: 'Order cannot be cancelled after kitchen acceptance.' };
     }
 
-    setActiveOrder(null);
+    setRawActiveOrder(null);
     setCart([]);
     setCurrentScreen('home');
 
