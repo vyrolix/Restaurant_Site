@@ -227,7 +227,7 @@ export function AppProvider({ children }) {
   const lastLocalMenuUpdateRef = useRef(0);
   const lastLocalOrdersUpdateRef = useRef(0);
 
-  // HIGH SPEED CLOUD REAL-TIME SYNC (1-SECOND POLLING WITH TIMESTAMP GUARD)
+  // HIGH SPEED CLOUD REAL-TIME SYNC (1-SECOND POLLING WITH FORCE NEW COPIES)
   useEffect(() => {
     let bc;
     if (typeof window !== 'undefined' && 'BroadcastChannel' in window) {
@@ -235,37 +235,37 @@ export function AppProvider({ children }) {
       bc.onmessage = (event) => {
         if (event.data) {
           if (event.data.type === 'SYNC_MENU' && event.data.menuItems) {
-            setMenuItemsList(event.data.menuItems);
+            setMenuItemsList([...event.data.menuItems]);
           }
           if (event.data.type === 'SYNC_ORDERS') {
-            if (event.data.ordersQueue) setOrdersQueue(event.data.ordersQueue);
-            if (event.data.tables) setTables(event.data.tables);
+            if (event.data.ordersQueue) setOrdersQueue([...event.data.ordersQueue]);
+            if (event.data.tables) setTables([...event.data.tables]);
           }
         }
       };
     }
 
     const syncCloudAndLocal = async () => {
-      // 1. Synchronize Menu Items if no local edit occurred in last 3 seconds
-      if (Date.now() - lastLocalMenuUpdateRef.current > 3000) {
+      // 1. Synchronize Menu Items if no local edit occurred in last 2.5 seconds
+      if (Date.now() - lastLocalMenuUpdateRef.current > 2500) {
         const cloudMenu = await fetchCloudMenu();
         if (cloudMenu && Array.isArray(cloudMenu) && cloudMenu.length >= 5) {
-          setMenuItemsList(cloudMenu);
+          setMenuItemsList([...cloudMenu]);
           localStorage.setItem('kn_menu_items', JSON.stringify(cloudMenu));
         } else if (!cloudMenu) {
           pushCloudMenu(mockMenuItems);
         }
       }
 
-      // 2. Synchronize Orders & Tables if no local order action occurred in last 3 seconds
-      if (Date.now() - lastLocalOrdersUpdateRef.current > 3000) {
+      // 2. Synchronize Orders & Tables if no local order action occurred in last 2.5 seconds
+      if (Date.now() - lastLocalOrdersUpdateRef.current > 2500) {
         const cloudOrders = await fetchCloudOrders();
         if (cloudOrders) {
           if (Array.isArray(cloudOrders.ordersQueue)) {
-            setOrdersQueue(cloudOrders.ordersQueue);
+            setOrdersQueue([...cloudOrders.ordersQueue]);
           }
           if (Array.isArray(cloudOrders.tables) && cloudOrders.tables.length > 0) {
-            setTables(cloudOrders.tables);
+            setTables([...cloudOrders.tables]);
           }
         }
       }
@@ -406,7 +406,7 @@ export function AppProvider({ children }) {
     // Update timestamp guard & orders queue
     lastLocalOrdersUpdateRef.current = Date.now();
     const newQueue = [newOrder, ...ordersQueue];
-    setOrdersQueue(newQueue);
+    setOrdersQueue([...newQueue]);
 
     // Push to Supabase Cloud Database (Global Multi-Network Vercel Sync)
     pushCloudOrders(newQueue, tables);
@@ -424,7 +424,7 @@ export function AppProvider({ children }) {
 
     lastLocalOrdersUpdateRef.current = Date.now();
     const newQueue = ordersQueue.map((o) => o.id === orderId ? { ...o, status: 'Cancelled' } : o);
-    setOrdersQueue(newQueue);
+    setOrdersQueue([...newQueue]);
 
     // Push to Supabase Cloud Database (Global Multi-Network Vercel Sync)
     pushCloudOrders(newQueue, tables);
@@ -449,7 +449,7 @@ export function AppProvider({ children }) {
   const updateOrderStatus = (orderId, nextStatus) => {
     lastLocalOrdersUpdateRef.current = Date.now();
     const newQueue = ordersQueue.map((o) => o.id === orderId ? { ...o, status: nextStatus } : o);
-    setOrdersQueue(newQueue);
+    setOrdersQueue([...newQueue]);
 
     // Push to Supabase Cloud Database (Global Multi-Network Vercel Sync)
     pushCloudOrders(newQueue, tables);
@@ -476,7 +476,7 @@ export function AppProvider({ children }) {
       item.id === itemId ? { ...item, inStock: !item.inStock } : item
     );
 
-    setMenuItemsList(updatedList);
+    setMenuItemsList([...updatedList]);
     localStorage.setItem('kn_menu_items', JSON.stringify(updatedList));
 
     // Push to Supabase Cloud Database (Global Multi-Network Vercel Sync)
@@ -490,7 +490,7 @@ export function AppProvider({ children }) {
       item.id === itemId ? { ...item, price: Number(newPrice) } : item
     );
 
-    setMenuItemsList(updatedList);
+    setMenuItemsList([...updatedList]);
     localStorage.setItem('kn_menu_items', JSON.stringify(updatedList));
 
     // Push to Supabase Cloud Database (Global Multi-Network Vercel Sync)
@@ -504,7 +504,7 @@ export function AppProvider({ children }) {
       item.id === itemId ? { ...item, ...updatedFields } : item
     );
 
-    setMenuItemsList(updatedList);
+    setMenuItemsList([...updatedList]);
     localStorage.setItem('kn_menu_items', JSON.stringify(updatedList));
 
     // Push to Supabase Cloud Database (Global Multi-Network Vercel Sync)
@@ -517,7 +517,7 @@ export function AppProvider({ children }) {
       item.id === itemId ? { ...item, image: 'table', customImage: null } : item
     );
 
-    setMenuItemsList(updatedList);
+    setMenuItemsList([...updatedList]);
     localStorage.setItem('kn_menu_items', JSON.stringify(updatedList));
 
     // Push to Supabase Cloud Database (Global Multi-Network Vercel Sync)
@@ -541,7 +541,7 @@ export function AppProvider({ children }) {
     };
 
     const updatedList = [newItem, ...menuItemsList];
-    setMenuItemsList(updatedList);
+    setMenuItemsList([...updatedList]);
     localStorage.setItem('kn_menu_items', JSON.stringify(updatedList));
 
     // Push to Supabase Cloud Database (Global Multi-Network Vercel Sync)
