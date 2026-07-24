@@ -1,19 +1,25 @@
-// Ultra-Reliable Cloud Real-time Synchronization Service for Vercel & Multi-Device Deployment
+// Official Supabase Real-time Cloud Synchronization Service for Vercel & Multi-Device Deployment
 
-const SYNC_API_ENDPOINT = 'https://api.jsonbin.io/v3/b/6690f055e41b4d34e402a4b8';
-const SYNC_KEY = '$2a$10$7vM7j.Z9T.680KqO9n60O./y824x/FwJ8v2dD3B6C9A2b3c4d5e6f';
+const SUPABASE_URL = 'https://nkqiwnmaqcjulhjlcpqu.supabase.co';
+const SUPABASE_KEY = 'sb_publishable_BQPy3mX-E0AYAkVCkMDZMg_Xz3_6GO7';
 
-// Secondary Failover Cloud Sync Endpoint
-const PUBLIC_KV_URL = 'https://kvdb.io/Wk6fCjG9F8D3JpZ9/kn_menu_store_satna_v2';
-const PUBLIC_ORDERS_URL = 'https://kvdb.io/Wk6fCjG9F8D3JpZ9/kn_orders_store_satna_v2';
+const getHeaders = () => ({
+  'apikey': SUPABASE_KEY,
+  'Authorization': `Bearer ${SUPABASE_KEY}`,
+  'Content-Type': 'application/json',
+  'Prefer': 'resolution=merge-duplicates'
+});
 
 export const fetchCloudMenu = async () => {
   try {
-    const res = await fetch(PUBLIC_KV_URL, { cache: 'no-cache' });
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/kn_store?id=eq.menu&select=data`, {
+      headers: getHeaders(),
+      cache: 'no-cache'
+    });
     if (res.ok) {
-      const data = await res.json();
-      if (Array.isArray(data) && data.length > 0) {
-        return data;
+      const rows = await res.json();
+      if (rows && rows.length > 0 && Array.isArray(rows[0].data)) {
+        return rows[0].data;
       }
     }
   } catch (err) {}
@@ -23,10 +29,10 @@ export const fetchCloudMenu = async () => {
 export const pushCloudMenu = async (menuItems) => {
   if (!menuItems || menuItems.length === 0) return;
   try {
-    await fetch(PUBLIC_KV_URL, {
+    await fetch(`${SUPABASE_URL}/rest/v1/kn_store`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(menuItems)
+      headers: getHeaders(),
+      body: JSON.stringify([{ id: 'menu', data: menuItems }])
     });
   } catch (err) {
     console.error('Cloud menu push error:', err);
@@ -35,11 +41,14 @@ export const pushCloudMenu = async (menuItems) => {
 
 export const fetchCloudOrders = async () => {
   try {
-    const res = await fetch(PUBLIC_ORDERS_URL, { cache: 'no-cache' });
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/kn_store?id=eq.orders&select=data`, {
+      headers: getHeaders(),
+      cache: 'no-cache'
+    });
     if (res.ok) {
-      const data = await res.json();
-      if (data && Array.isArray(data.ordersQueue)) {
-        return data;
+      const rows = await res.json();
+      if (rows && rows.length > 0 && rows[0].data && Array.isArray(rows[0].data.ordersQueue)) {
+        return rows[0].data;
       }
     }
   } catch (err) {}
@@ -48,10 +57,10 @@ export const fetchCloudOrders = async () => {
 
 export const pushCloudOrders = async (ordersQueue, tables) => {
   try {
-    await fetch(PUBLIC_ORDERS_URL, {
+    await fetch(`${SUPABASE_URL}/rest/v1/kn_store`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ordersQueue, tables, updatedAt: Date.now() })
+      headers: getHeaders(),
+      body: JSON.stringify([{ id: 'orders', data: { ordersQueue, tables, updatedAt: Date.now() } }])
     });
   } catch (err) {
     console.error('Cloud orders push error:', err);
