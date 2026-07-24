@@ -1,0 +1,10 @@
+{
+  "name": "restaurant-site-root",
+  "private": true,
+  "workspaces": [
+    "client"
+  ],
+  "scripts": {
+    "build": "npm run build --workspace=client"
+  }
+}
