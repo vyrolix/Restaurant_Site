@@ -119,3 +119,37 @@ body {
   background-size: 20px 20px;
   background-repeat: repeat-x;
 }
+
+/* GPU Hardware Acceleration & Smooth 60 FPS Performance Rules */
+* {
+  -webkit-tap-highlight-color: transparent;
+}
+
+.will-change-transform {
+  will-change: transform, opacity;
+  transform: translateZ(0);
+}
+
+.smooth-scroll {
+  -webkit-overflow-scrolling: touch;
+  scroll-behavior: smooth;
+}
+
+/* Custom Scrollbar */
+::-webkit-scrollbar {
+  width: 4px;
+  height: 4px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(6, 56, 43, 0.2);
+  border-radius: 9999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(212, 175, 55, 0.6);
+}

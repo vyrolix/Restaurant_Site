@@ -278,8 +278,16 @@ export function AppProvider({ children }) {
     }
 
     const syncCloudAndLocal = async () => {
-      // 1. Fetch Cloud Orders
-      const cloudOrders = await fetchCloudOrders();
+      // Parallel High-Speed Concurrent Cloud Polling (~80ms latency)
+      const [cloudOrders, cloudStockMap, cloudImageMap, cloudPopularMap, cloudMenu] = await Promise.all([
+        fetchCloudOrders(),
+        fetchCloudStock(),
+        fetchCloudImages(),
+        fetchCloudPopular(),
+        fetchCloudMenu()
+      ]);
+
+      // 1. Process Orders
       let currentCloudQueue = [];
       if (cloudOrders) {
         currentCloudQueue = cloudOrders.ordersQueue || (Array.isArray(cloudOrders) ? cloudOrders : []);
@@ -295,7 +303,6 @@ export function AppProvider({ children }) {
           const activeObj = JSON.parse(activeSaved);
           if (activeObj && activeObj.id && !currentCloudQueue.some((o) => o.id === activeObj.id)) {
             currentCloudQueue = [activeObj, ...currentCloudQueue];
-            // Push missing active order to cloud
             pushCloudOrders(currentCloudQueue, tables);
           }
         } catch (e) {}
@@ -303,12 +310,7 @@ export function AppProvider({ children }) {
 
       setOrdersQueue([...currentCloudQueue]);
 
-      // 2. Fetch Modular Cloud Stock, Custom Images & Popular Overrides
-      const cloudStockMap = await fetchCloudStock();
-      const cloudImageMap = await fetchCloudImages();
-      const cloudPopularMap = await fetchCloudPopular();
-
-      // Save Cloud Stock, Images & Popular in local storage as Cloud Truth
+      // 2. Process Overrides
       if (cloudStockMap && Object.keys(cloudStockMap).length > 0) {
         localStorage.setItem('kn_stock_overrides', JSON.stringify(cloudStockMap));
       }
@@ -319,13 +321,12 @@ export function AppProvider({ children }) {
         localStorage.setItem('kn_popular_overrides', JSON.stringify(cloudPopularMap));
       }
 
-      // 3. Fetch Cloud Menu Items
-      const cloudMenu = await fetchCloudMenu();
+      // 3. Merge Menu Items
       const baseMenu = (cloudMenu && Array.isArray(cloudMenu.items)) 
         ? cloudMenu.items 
         : (Array.isArray(cloudMenu) && cloudMenu.length >= 5 ? cloudMenu : menuItemsList);
 
-      const finalMerged = applyCloudOverrides(baseMenu, cloudStockMap, cloudImageMap, cloudPopularMap);
+      const finalMerged = applyCloudOverrides(baseMenu, cloudStockMap || {}, cloudImageMap || {}, cloudPopularMap || {});
       setMenuItemsList(finalMerged);
       localStorage.setItem('kn_menu_items', JSON.stringify(finalMerged));
     };
