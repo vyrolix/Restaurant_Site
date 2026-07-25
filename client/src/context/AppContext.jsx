@@ -614,6 +614,28 @@ export function AppProvider({ children }) {
     await pushCloudMenu(updatedList);
   };
 
+  // HIDE / UNHIDE DISH FOR CUSTOMERS
+  const toggleItemVisibility = async (itemId) => {
+    const updatedList = menuItemsList.map((i) => 
+      i.id === itemId ? { ...i, isHidden: !i.isHidden } : i
+    );
+    setMenuItemsList(updatedList);
+    localStorage.setItem('kn_menu_items', JSON.stringify(updatedList));
+
+    // Push updated menu to Supabase Cloud Database
+    await pushCloudMenu(updatedList);
+  };
+
+  // PERMANENTLY DELETE DISH FROM MENU
+  const deleteMenuItem = async (itemId) => {
+    const updatedList = menuItemsList.filter((i) => i.id !== itemId);
+    setMenuItemsList(updatedList);
+    localStorage.setItem('kn_menu_items', JSON.stringify(updatedList));
+
+    // Push updated menu to Supabase Cloud Database
+    await pushCloudMenu(updatedList);
+  };
+
   // REAL-TIME CLOUD & PERMANENT LOCAL PRICE EDIT
   const updateItemPrice = async (itemId, newPrice) => {
     const updatedList = menuItemsList.map((i) => i.id === itemId ? { ...i, price: Number(newPrice) } : i);
@@ -724,6 +746,8 @@ export function AppProvider({ children }) {
       adminLogout,
       tables,
       toggleItemStock,
+      toggleItemVisibility,
+      deleteMenuItem,
       togglePopularStatus,
       updateItemPrice,
       updateMenuItem,

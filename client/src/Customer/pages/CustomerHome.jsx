@@ -14,8 +14,9 @@ export default function CustomerHome() {
   const [selectedDetailItem, setSelectedDetailItem] = useState(null);
 
   const cartCount = cart.reduce((acc, ci) => acc + ci.quantity, 0);
-  const explicitPopular = menuItems.filter((i) => i.isPopular === true);
-  const popularDishes = explicitPopular.length > 0 ? explicitPopular : menuItems.slice(0, 20);
+  const visibleItems = menuItems.filter((i) => !i.isHidden);
+  const explicitPopular = visibleItems.filter((i) => i.isPopular === true);
+  const popularDishes = explicitPopular.length > 0 ? explicitPopular : visibleItems.slice(0, 20);
 
   const getImage = (item) => {
     if (!item) return tableImg;

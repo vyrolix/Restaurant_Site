@@ -44,6 +44,7 @@ export default function MenuExplorer() {
   };
 
   const filteredItems = menuItems.filter((item) => {
+    if (item.isHidden) return false;
     const matchesSearch = item.name.toLowerCase().includes(search.toLowerCase()) || 
                           item.description.toLowerCase().includes(search.toLowerCase()) ||
                           (item.subcategory && item.subcategory.toLowerCase().includes(search.toLowerCase()));

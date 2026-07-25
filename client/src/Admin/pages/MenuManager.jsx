@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useApp } from '../../context/AppContext';
-import { Plus, Edit2, CheckCircle2, XCircle, Search, Trash2, Camera, RefreshCw, Star, Sparkles } from 'lucide-react';
+import { Plus, Edit2, CheckCircle2, XCircle, Search, Trash2, Camera, RefreshCw, Star, Sparkles, Eye, EyeOff, AlertTriangle } from 'lucide-react';
 import steakImg from '../../assets/steak.png';
 import tableImg from '../../assets/table.png';
 import salmonImg from '../../assets/salmon.png';
@@ -10,6 +10,8 @@ export default function MenuManager() {
   const { 
     menuItems, 
     toggleItemStock, 
+    toggleItemVisibility,
+    deleteMenuItem,
     togglePopularStatus,
     updateItemPrice, 
     updateMenuItem, 
@@ -18,16 +20,24 @@ export default function MenuManager() {
   } = useApp();
 
   const [search, setSearch] = useState('');
-  const [viewFilter, setViewFilter] = useState('all'); // 'all' or 'featured'
+  const [viewFilter, setViewFilter] = useState('all'); // 'all', 'featured', 'hidden'
   const [editingItem, setEditingItem] = useState(null);
   const [isAddingNew, setIsAddingNew] = useState(false);
   const [toastMessage, setToastMessage] = useState(null);
+  const [deletingItemTarget, setDeletingItemTarget] = useState(null);
 
   const handleFeatureToggle = async (itemId) => {
     const res = await togglePopularStatus(itemId);
     if (res && res.success === false) {
       setToastMessage(res.message);
       setTimeout(() => setToastMessage(null), 3500);
+    }
+  };
+
+  const handleConfirmDelete = async () => {
+    if (deletingItemTarget) {
+      await deleteMenuItem(deletingItemTarget.id);
+      setDeletingItemTarget(null);
     }
   };
 
@@ -160,6 +170,7 @@ export default function MenuManager() {
   };
 
   const featuredCount = menuItems.filter((i) => i.isPopular === true).length;
+  const hiddenCount = menuItems.filter((i) => i.isHidden === true).length;
 
   const filteredItems = menuItems.filter((item) => {
     const matchesSearch = 
@@ -169,6 +180,9 @@ export default function MenuManager() {
 
     if (viewFilter === 'featured') {
       return matchesSearch && item.isPopular === true;
+    }
+    if (viewFilter === 'hidden') {
+      return matchesSearch && item.isHidden === true;
     }
     return matchesSearch;
   });
@@ -186,8 +200,8 @@ export default function MenuManager() {
       {/* Header & Add Button */}
       <div className="flex justify-between items-center">
         <div>
-          <h3 className="font-serif text-[#06382B] font-bold text-base">Menu & Home Display Controls</h3>
-          <span className="text-[10px] text-neutral-500">Manage dish stock, prices, photos & Home Page Featured items</span>
+          <h3 className="font-serif text-[#06382B] font-bold text-base">Menu Management & Controls</h3>
+          <span className="text-[10px] text-neutral-500">Manage dish stock, prices, photos, featured items, hiding & deletion</span>
         </div>
         
         <button 
@@ -203,17 +217,24 @@ export default function MenuManager() {
         <div className="flex justify-between items-center">
           <div className="flex items-center gap-1.5 text-[#06382B] font-bold text-xs">
             <Star className="w-4 h-4 text-amber-500 fill-amber-400" />
-            <span>Home Page Featured Dishes Control</span>
+            <span>Home Featured & Dish Visibility Controls</span>
           </div>
-          <span className="bg-[#06382B] text-[#D4AF37] px-2.5 py-0.5 rounded-full text-[10px] font-bold shadow-xs">
-            {featuredCount} Featured
-          </span>
+          <div className="flex gap-1">
+            <span className="bg-[#06382B] text-[#D4AF37] px-2 py-0.5 rounded-full text-[10px] font-bold shadow-xs">
+              {featuredCount} Featured
+            </span>
+            {hiddenCount > 0 && (
+              <span className="bg-purple-100 text-purple-800 border border-purple-300 px-2 py-0.5 rounded-full text-[10px] font-bold">
+                {hiddenCount} Hidden
+              </span>
+            )}
+          </div>
         </div>
         <p className="text-[11px] text-[#06382B]/80 leading-relaxed">
-          Click the ⭐ <b>Featured</b> button on any dish below to select exactly which dishes appear on the Customer Home Page under <i>"Popular near you"</i>!
+          Use ⭐ <b>Featured</b> to select Home items, 👁️ <b>Hide</b> to temporarily conceal items from customers, or 🗑️ <b>Delete</b> to permanently remove dishes.
         </p>
 
-        <div className="flex gap-2 pt-1">
+        <div className="flex gap-2 pt-1 flex-wrap">
           <button
             onClick={() => setViewFilter('all')}
             className={`px-3 py-1 rounded-xl font-bold text-[11px] cursor-pointer transition-all ${
@@ -232,8 +253,20 @@ export default function MenuManager() {
                 : 'bg-white text-amber-700 border border-amber-300'
             }`}
           >
-            <Star className="w-3 h-3 fill-current" /> ⭐ Home Featured ({featuredCount})
+            <Star className="w-3 h-3 fill-current" /> ⭐ Featured ({featuredCount})
           </button>
+          {hiddenCount > 0 && (
+            <button
+              onClick={() => setViewFilter('hidden')}
+              className={`px-3 py-1 rounded-xl font-bold text-[11px] cursor-pointer transition-all flex items-center gap-1 ${
+                viewFilter === 'hidden'
+                  ? 'bg-purple-600 text-white shadow-xs'
+                  : 'bg-white text-purple-700 border border-purple-300'
+              }`}
+            >
+              <EyeOff className="w-3 h-3" /> 👁️ Hidden ({hiddenCount})
+            </button>
+          )}
         </div>
       </div>
 
@@ -255,16 +288,16 @@ export default function MenuManager() {
           <div className="p-8 text-center text-neutral-400">
             {viewFilter === 'featured' 
               ? 'No dishes featured on Home Page yet. Click ⭐ Featured on any dish to select it!'
-              : 'No menu items found matching search.'
+              : (viewFilter === 'hidden' ? 'No items currently hidden from customers.' : 'No menu items found matching search.')
             }
           </div>
         ) : (
           filteredItems.map((item) => (
-            <div key={item.id} className="p-3 flex justify-between items-center gap-3">
+            <div key={item.id} className={`p-3 flex justify-between items-center gap-2 ${item.isHidden ? 'bg-purple-50/50' : ''}`}>
               
               {/* Dish Thumbnail & Camera Trigger */}
               <div className="relative w-12 h-12 rounded-xl overflow-hidden shrink-0 border border-neutral-200 group">
-                <img src={getImageSrc(item)} alt={item.name} className="w-full h-full object-cover" />
+                <img src={getImageSrc(item)} alt={item.name} className={`w-full h-full object-cover ${item.isHidden ? 'opacity-50 grayscale' : ''}`} />
                 <button 
                   onClick={() => openEditModal(item)}
                   className="absolute inset-0 bg-black/60 text-[#D4AF37] flex items-center justify-center cursor-pointer opacity-90 group-hover:opacity-100 transition-opacity"
@@ -276,15 +309,23 @@ export default function MenuManager() {
 
               {/* Info */}
               <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-1.5">
-                  <span className="w-2 h-2 rounded-full bg-emerald-600 shrink-0" />
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  <span className={`w-2 h-2 rounded-full shrink-0 ${item.isHidden ? 'bg-purple-600' : 'bg-emerald-600'}`} />
                   <h4 className="font-serif font-bold text-[#06382B] text-xs truncate">{item.name}</h4>
-                  {item.isPopular && (
+                  
+                  {item.isHidden && (
+                    <span className="bg-purple-100 text-purple-800 text-[9px] font-bold px-1.5 py-0.2 rounded-md flex items-center gap-0.5 shrink-0 border border-purple-300">
+                      <EyeOff className="w-2.5 h-2.5 text-purple-600" /> Hidden
+                    </span>
+                  )}
+
+                  {item.isPopular && !item.isHidden && (
                     <span className="bg-amber-100 text-amber-800 text-[9px] font-bold px-1.5 py-0.2 rounded-md flex items-center gap-0.5 shrink-0 border border-amber-300">
                       <Star className="w-2.5 h-2.5 fill-amber-400 text-amber-500" /> Home
                     </span>
                   )}
                 </div>
+                
                 <span className="text-[10px] text-neutral-400 truncate block">
                   {item.subcategory} • {item.category}
                 </span>
@@ -306,8 +347,10 @@ export default function MenuManager() {
                 </div>
               </div>
 
-              {/* Actions: Edit, Home Feature & Stock Toggle */}
-              <div className="flex items-center gap-1.5 shrink-0">
+              {/* Actions: Edit, Home Feature, Hide, Delete & Stock Toggle */}
+              <div className="flex items-center gap-1 shrink-0 flex-wrap justify-end">
+                
+                {/* Full Edit Button */}
                 <button 
                   onClick={() => openEditModal(item)}
                   className="p-1.5 bg-neutral-100 hover:bg-neutral-200 text-[#06382B] rounded-lg cursor-pointer transition-colors"
@@ -316,6 +359,7 @@ export default function MenuManager() {
                   <Edit2 className="w-3.5 h-3.5" />
                 </button>
 
+                {/* Home Feature Toggle */}
                 <button 
                   onClick={() => handleFeatureToggle(item.id)}
                   className={`p-1.5 rounded-lg border transition-all cursor-pointer flex items-center gap-1 text-[10px] font-bold ${
@@ -329,9 +373,24 @@ export default function MenuManager() {
                   <span className="hidden sm:inline">{item.isPopular ? 'Featured' : 'Home'}</span>
                 </button>
 
+                {/* Hide / Unhide Toggle */}
+                <button 
+                  onClick={() => toggleItemVisibility(item.id)}
+                  className={`p-1.5 rounded-lg border transition-all cursor-pointer flex items-center gap-1 text-[10px] font-bold ${
+                    item.isHidden 
+                      ? 'bg-purple-100 text-purple-800 border-purple-300 shadow-xs' 
+                      : 'bg-neutral-100 text-neutral-500 border-neutral-200 hover:text-purple-700'
+                  }`}
+                  title={item.isHidden ? 'Hidden from Customers (Click to Unhide)' : 'Visible to Customers (Click to Hide)'}
+                >
+                  {item.isHidden ? <EyeOff className="w-3.5 h-3.5 text-purple-600" /> : <Eye className="w-3.5 h-3.5 text-neutral-500" />}
+                  <span className="hidden sm:inline">{item.isHidden ? 'Hidden' : 'Hide'}</span>
+                </button>
+
+                {/* Stock Toggle */}
                 <button 
                   onClick={() => toggleItemStock(item.id)}
-                  className={`px-2.5 py-1.5 rounded-xl font-bold text-[10px] flex items-center gap-1 cursor-pointer transition-all duration-200 ${
+                  className={`px-2 py-1.5 rounded-xl font-bold text-[10px] flex items-center gap-1 cursor-pointer transition-all duration-200 ${
                     item.inStock 
                       ? 'bg-emerald-100 text-emerald-800 border border-emerald-300' 
                       : 'bg-red-100 text-red-800 border border-red-300'
@@ -347,12 +406,55 @@ export default function MenuManager() {
                     </>
                   )}
                 </button>
+
+                {/* Permanent Delete Button */}
+                <button 
+                  onClick={() => setDeletingItemTarget(item)}
+                  className="p-1.5 bg-red-50 hover:bg-red-100 text-red-600 border border-red-200 rounded-lg cursor-pointer transition-colors"
+                  title="Permanently Delete Dish"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                </button>
+
               </div>
 
             </div>
           ))
         )}
       </div>
+
+      {/* Delete Confirmation Modal */}
+      {deletingItemTarget && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-xs z-50 flex items-center justify-center p-4 animate-fade-in">
+          <div className="bg-white w-full max-w-xs rounded-2xl p-5 space-y-4 text-center border border-red-200 shadow-2xl">
+            <div className="w-12 h-12 bg-red-100 text-red-600 rounded-full flex items-center justify-center mx-auto">
+              <AlertTriangle className="w-6 h-6" />
+            </div>
+            
+            <div className="space-y-1">
+              <h4 className="font-serif font-bold text-[#06382B] text-base">Delete Gourmet Dish?</h4>
+              <p className="text-neutral-500 text-xs leading-relaxed">
+                Are you sure you want to permanently delete <b>"{deletingItemTarget.name}"</b>? This will remove it from Supabase Cloud Database.
+              </p>
+            </div>
+
+            <div className="flex gap-2 pt-2">
+              <button 
+                onClick={() => setDeletingItemTarget(null)}
+                className="flex-1 bg-neutral-100 hover:bg-neutral-200 text-neutral-700 py-2.5 rounded-xl font-bold text-xs cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button 
+                onClick={handleConfirmDelete}
+                className="flex-1 bg-red-600 hover:bg-red-700 text-white py-2.5 rounded-xl font-bold text-xs cursor-pointer shadow-md"
+              >
+                Delete Dish
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Edit / Add Modal */}
       {(editingItem || isAddingNew) && (
