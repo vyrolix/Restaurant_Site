@@ -3,20 +3,30 @@ import {
   fetchCloudMenu, pushCloudMenu, 
   fetchCloudOrders, pushCloudOrders, 
   fetchCloudStock, pushCloudStock, 
-  fetchCloudImages, pushCloudImages 
+  fetchCloudImages, pushCloudImages,
+  fetchCloudPopular, pushCloudPopular
 } from '../Services/cloudSync';
 
 const AppContext = createContext();
 
-// Helper to merge Menu items with Cloud Stock & Cloud Image Maps
-const applyCloudOverrides = (items, stockMap = {}, imageMap = {}) => {
+// Helper to merge Menu items with Cloud Stock, Cloud Image & Cloud Popular Maps
+const applyCloudOverrides = (items, stockMap = {}, imageMap = {}, popularMap = {}) => {
   if (!items || !Array.isArray(items)) return items;
 
-  return items.map((item) => ({
-    ...item,
-    inStock: stockMap[item.id] !== undefined ? stockMap[item.id] : item.inStock,
-    customImage: imageMap[item.id] !== undefined ? imageMap[item.id] : item.customImage
-  }));
+  const hasPopularOverrides = Object.keys(popularMap).length > 0;
+
+  return items.map((item, idx) => {
+    const isPop = popularMap[item.id] !== undefined 
+      ? popularMap[item.id] 
+      : (hasPopularOverrides ? false : idx < 6);
+
+    return {
+      ...item,
+      inStock: stockMap[item.id] !== undefined ? stockMap[item.id] : item.inStock,
+      customImage: imageMap[item.id] !== undefined ? imageMap[item.id] : item.customImage,
+      isPopular: isPop
+    };
+  });
 };
 
 // Official K/N Restaurant Menu
@@ -293,16 +303,20 @@ export function AppProvider({ children }) {
 
       setOrdersQueue([...currentCloudQueue]);
 
-      // 2. Fetch Modular Cloud Stock & Modular Cloud Custom Images
+      // 2. Fetch Modular Cloud Stock, Custom Images & Popular Overrides
       const cloudStockMap = await fetchCloudStock();
       const cloudImageMap = await fetchCloudImages();
+      const cloudPopularMap = await fetchCloudPopular();
 
-      // Save Cloud Stock & Images in local storage as Cloud Truth
+      // Save Cloud Stock, Images & Popular in local storage as Cloud Truth
       if (cloudStockMap && Object.keys(cloudStockMap).length > 0) {
         localStorage.setItem('kn_stock_overrides', JSON.stringify(cloudStockMap));
       }
       if (cloudImageMap && Object.keys(cloudImageMap).length > 0) {
         localStorage.setItem('kn_custom_images', JSON.stringify(cloudImageMap));
+      }
+      if (cloudPopularMap && Object.keys(cloudPopularMap).length > 0) {
+        localStorage.setItem('kn_popular_overrides', JSON.stringify(cloudPopularMap));
       }
 
       // 3. Fetch Cloud Menu Items
@@ -311,7 +325,7 @@ export function AppProvider({ children }) {
         ? cloudMenu.items 
         : (Array.isArray(cloudMenu) && cloudMenu.length >= 5 ? cloudMenu : menuItemsList);
 
-      const finalMerged = applyCloudOverrides(baseMenu, cloudStockMap, cloudImageMap);
+      const finalMerged = applyCloudOverrides(baseMenu, cloudStockMap, cloudImageMap, cloudPopularMap);
       setMenuItemsList(finalMerged);
       localStorage.setItem('kn_menu_items', JSON.stringify(finalMerged));
     };
@@ -543,19 +557,41 @@ export function AppProvider({ children }) {
     setCurrentScreen('welcome');
   };
 
-  // TOGGLE POPULAR STATUS (Controls items shown on Home Page)
+  // TOGGLE POPULAR STATUS WITH 6-ITEM MINIMUM GUARD & MODULAR CLOUD SYNC
   const togglePopularStatus = async (itemId) => {
+    const cloudPopular = await fetchCloudPopular();
+    const localPopular = JSON.parse(localStorage.getItem('kn_popular_overrides') || '{}');
+    const currentPopularMap = { ...cloudPopular, ...localPopular };
+
     const currentItem = menuItemsList.find((i) => i.id === itemId);
-    const newPopular = currentItem ? !currentItem.isPopular : true;
+    const isCurrentlyPopular = currentItem ? currentItem.isPopular : false;
+
+    // Count currently featured items
+    const currentlyFeaturedCount = menuItemsList.filter((i) => i.isPopular).length;
+
+    // GUARD: Minimum 6 items must remain featured on the Home Page!
+    if (isCurrentlyPopular && currentlyFeaturedCount <= 6) {
+      return { 
+        success: false, 
+        message: 'Minimum 6 items must remain featured on the Home Page for customer experience!' 
+      };
+    }
+
+    const newPopularStatus = !isCurrentlyPopular;
+    const updatedPopularMap = { ...currentPopularMap, [itemId]: newPopularStatus };
+
+    localStorage.setItem('kn_popular_overrides', JSON.stringify(updatedPopularMap));
 
     const updatedList = menuItemsList.map((i) => 
-      i.id === itemId ? { ...i, isPopular: newPopular } : i
+      i.id === itemId ? { ...i, isPopular: newPopularStatus } : i
     );
     setMenuItemsList(updatedList);
     localStorage.setItem('kn_menu_items', JSON.stringify(updatedList));
 
-    // Push to Supabase Cloud Database
-    await pushCloudMenu(updatedList);
+    // Push lightweight popular override map (~1KB) to Supabase Cloud
+    await pushCloudPopular(updatedPopularMap);
+
+    return { success: true };
   };
 
   // REAL-TIME MODULAR CLOUD & PERMANENT LOCAL DISH STOCK TOGGLE

@@ -66,7 +66,34 @@ export const pushCloudStock = async (stockMap) => {
   } catch (err) {}
 };
 
-// 3. CUSTOM IMAGES SYNC
+// 3. HOME POPULAR OVERRIDES SYNC (~1KB payload)
+export const fetchCloudPopular = async () => {
+  try {
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/kn_store?id=eq.popular_overrides&select=data`, {
+      headers: getHeaders(),
+      cache: 'no-store'
+    });
+    if (res.ok) {
+      const rows = await res.json();
+      if (rows && rows.length > 0 && rows[0].data) {
+        return rows[0].data;
+      }
+    }
+  } catch (err) {}
+  return {};
+};
+
+export const pushCloudPopular = async (popularMap) => {
+  try {
+    await fetch(`${SUPABASE_URL}/rest/v1/kn_store?on_conflict=id`, {
+      method: 'POST',
+      headers: getHeaders(),
+      body: JSON.stringify([{ id: 'popular_overrides', data: popularMap }])
+    });
+  } catch (err) {}
+};
+
+// 4. CUSTOM IMAGES SYNC
 export const fetchCloudImages = async () => {
   try {
     const res = await fetch(`${SUPABASE_URL}/rest/v1/kn_store?id=eq.custom_images&select=data`, {
@@ -93,7 +120,7 @@ export const pushCloudImages = async (imagesMap) => {
   } catch (err) {}
 };
 
-// 4. ORDERS SYNC
+// 5. ORDERS SYNC
 export const fetchCloudOrders = async () => {
   try {
     const res = await fetch(`${SUPABASE_URL}/rest/v1/kn_store?id=eq.orders&select=data`, {

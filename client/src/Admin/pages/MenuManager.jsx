@@ -21,6 +21,15 @@ export default function MenuManager() {
   const [viewFilter, setViewFilter] = useState('all'); // 'all' or 'featured'
   const [editingItem, setEditingItem] = useState(null);
   const [isAddingNew, setIsAddingNew] = useState(false);
+  const [toastMessage, setToastMessage] = useState(null);
+
+  const handleFeatureToggle = async (itemId) => {
+    const res = await togglePopularStatus(itemId);
+    if (res && res.success === false) {
+      setToastMessage(res.message);
+      setTimeout(() => setToastMessage(null), 3500);
+    }
+  };
 
   const [formData, setFormData] = useState({
     name: '',
@@ -165,7 +174,14 @@ export default function MenuManager() {
   });
 
   return (
-    <div className="p-4 space-y-4 font-sans text-xs">
+    <div className="p-4 space-y-4 font-sans text-xs relative">
+      
+      {/* Toast Alert Banner */}
+      {toastMessage && (
+        <div className="fixed top-20 left-4 right-4 z-50 bg-red-600 text-white p-3 rounded-2xl shadow-2xl font-bold text-xs text-center border border-white/30 animate-bounce">
+          {toastMessage}
+        </div>
+      )}
       
       {/* Header & Add Button */}
       <div className="flex justify-between items-center">
@@ -301,7 +317,7 @@ export default function MenuManager() {
                 </button>
 
                 <button 
-                  onClick={() => togglePopularStatus(item.id)}
+                  onClick={() => handleFeatureToggle(item.id)}
                   className={`p-1.5 rounded-lg border transition-all cursor-pointer flex items-center gap-1 text-[10px] font-bold ${
                     item.isPopular 
                       ? 'bg-amber-100 text-amber-800 border-amber-300 shadow-xs' 
