@@ -558,7 +558,7 @@ export function AppProvider({ children }) {
     setCurrentScreen('welcome');
   };
 
-  // TOGGLE POPULAR STATUS WITH 6-ITEM MINIMUM GUARD & MODULAR CLOUD SYNC
+  // TOGGLE POPULAR STATUS WITH 6-ITEM MINIMUM GUARD & DUAL CLOUD PERMANENCE
   const togglePopularStatus = async (itemId) => {
     const cloudPopular = await fetchCloudPopular();
     const localPopular = JSON.parse(localStorage.getItem('kn_popular_overrides') || '{}');
@@ -589,8 +589,9 @@ export function AppProvider({ children }) {
     setMenuItemsList(updatedList);
     localStorage.setItem('kn_menu_items', JSON.stringify(updatedList));
 
-    // Push lightweight popular override map (~1KB) to Supabase Cloud
+    // Dual Push: Both modular override map (~1KB) & primary menu array to Supabase Cloud
     await pushCloudPopular(updatedPopularMap);
+    await pushCloudMenu(updatedList);
 
     return { success: true };
   };
@@ -606,9 +607,11 @@ export function AppProvider({ children }) {
 
     const updatedList = menuItemsList.map((i) => i.id === itemId ? { ...i, inStock: newStock } : i);
     setMenuItemsList(updatedList);
+    localStorage.setItem('kn_menu_items', JSON.stringify(updatedList));
 
-    // Push lightweight stock override map (~1KB) to Supabase Cloud
+    // Dual Push: Both modular stock override map (~1KB) & primary menu array to Supabase Cloud
     await pushCloudStock(updatedStockMap);
+    await pushCloudMenu(updatedList);
   };
 
   // REAL-TIME CLOUD & PERMANENT LOCAL PRICE EDIT
